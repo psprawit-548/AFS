@@ -120,7 +120,7 @@ tbody tr:last-child td{border-bottom:0}
 /* modal / drawer */
 .overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;z-index:50}
 .overlay.open{display:block}
-.modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;background:var(--panel);border-radius:14px;padding:22px;z-index:51;display:none}
+.modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;background:var(--panel);border-radius:14px;padding:22px;z-index:70;display:none}
 .modal.open{display:block}
 .modal h2{margin:0 0 4px;font-size:19px}
 .drawer{position:fixed;right:0;top:0;height:100vh;width:min(560px,100vw);background:var(--panel);z-index:51;transform:translateX(100%);transition:transform .2s;overflow:auto;padding:22px;box-shadow:-8px 0 24px rgba(0,0,0,.08)}
@@ -209,6 +209,10 @@ tbody tr:last-child td{border-bottom:0}
 .overall-footnote{margin-top:14px;color:var(--muted);font-size:12px}
 @media (max-width:1200px){ .metrics{grid-template-columns:repeat(3,minmax(0,1fr))} .insights{grid-template-columns:1fr 1fr} }
 @media (max-width:700px){ .metrics{grid-template-columns:repeat(2,minmax(0,1fr))} .insights{grid-template-columns:1fr} }
+.sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.sig-label{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:500;margin-bottom:4px}
+canvas.sig{width:100%;height:150px;border:1.5px dashed #9ca3af;border-radius:10px;background:#fff;touch-action:none;cursor:crosshair}
+@media (max-width:700px){ .sig-grid{grid-template-columns:1fr} }
 .auth-screen{position:fixed;inset:0;background:var(--bg);z-index:80;display:grid;place-items:center;padding:16px}
 .auth-card{width:min(420px,100%);background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:28px}
 .auth-card .brand{display:flex;gap:12px;align-items:center;margin-bottom:18px}
@@ -424,7 +428,7 @@ function fillWarranty(d){
 }
 const wEndOf = c => c.warrantyEnd || (c.handoverDate ? addYears(c.handoverDate,WARRANTY_YEARS) : '');
 const fromCase = r => ({id:r.id, code:r.code, customerId:r.customer_id, title:r.title||'', detail:r.detail||'', location:r.location||'', category:r.category||'อื่นๆ', priority:r.priority, status:r.status, assignee:r.assignee||'', openedAt:r.opened_at, dueAt:r.due_at||'', closedAt:r.closed_at||'', rework:r.rework||0, photos:r.photos||[],
-  subcategory:r.subcategory||'', warranty:r.warranty||'', origContractor:r.orig_contractor||'', fixContractor:r.fix_contractor||'', visitDue:r.visit_due||'', visitedAt:r.visited_at||'', closeReqAt:r.close_requested_at||'', closeReqBy:r.close_requested_by||'', closeReqNote:r.close_request_note||'', claimCost:r.claim_cost==null?'':Number(r.claim_cost)});
+  subcategory:r.subcategory||'', warranty:r.warranty||'', origContractor:r.orig_contractor||'', fixContractor:r.fix_contractor||'', visitDue:r.visit_due||'', visitedAt:r.visited_at||'', closeReqAt:r.close_requested_at||'', closeReqBy:r.close_requested_by||'', closeReqNote:r.close_request_note||'', handover:r.handover||null, claimCost:r.claim_cost==null?'':Number(r.claim_cost)});
 
 async function loadAll(){
   const [cu, ca, lg, us] = await Promise.all([
@@ -798,12 +802,15 @@ function closeRequestPanel(){
   </tbody></table></div>`:''}</div>`;
 }
 function closeBox(c){
-  if(!isOpen(c)) return '';
-  if(closePending(c)) return `<div class="notice" style="background:var(--orange-soft);color:#8a4a0b;margin-top:12px">⏳ <b>รออนุมัติปิดเคส</b> · ขอโดย ${esc(c.closeReqBy)} เมื่อ ${thDateTime(c.closeReqAt)}${c.closeReqNote?`<br>“${esc(c.closeReqNote)}”`:''}
+  const ho = c.handover;
+  const hoLine = ho?.signedAt ? `<div class="notice" style="background:var(--green-soft);color:#0b5d3b;margin-top:12px">✍️ <b>ลูกค้าเซ็นใบส่งมอบแล้ว</b> · ${esc(ho.customerName||'')} · ${thDateTime(ho.signedAt)}
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn sm" onclick="printCaseHandover('${c.id}')">ดู / พิมพ์ใบส่งมอบงาน</button>${can('edit')?`<button class="btn sm" onclick="openSignHandover('${c.id}','resign')">เซ็นใหม่</button>`:''}</div></div>` : '';
+  if(!isOpen(c)) return hoLine || (can('edit')?`<div class="notice" style="margin-top:12px">ยังไม่มีลายเซ็นลูกค้าในใบส่งมอบงาน<div style="margin-top:8px"><button class="btn sm primary" onclick="openSignHandover('${c.id}','sign')">✍️ ให้ลูกค้าเซ็นใบส่งมอบ</button></div></div>`:'');
+  if(closePending(c)) return hoLine + `<div class="notice" style="background:var(--orange-soft);color:#8a4a0b;margin-top:12px">⏳ <b>รออนุมัติปิดเคส</b> · ขอโดย ${esc(c.closeReqBy)} เมื่อ ${thDateTime(c.closeReqAt)}${c.closeReqNote?`<br>“${esc(c.closeReqNote)}”`:''}
     ${can('close')?`<div style="display:flex;gap:8px;margin-top:8px"><button class="btn sm primary" onclick="approveClose('${c.id}')">อนุมัติปิดเคส</button><button class="btn sm danger" onclick="rejectClose('${c.id}')">ไม่อนุมัติ</button></div>`:''}</div>`;
-  if(can('close')) return `<div style="margin-top:12px"><button class="btn sm primary" onclick="closeCase('${c.id}')">✓ Close เคส</button></div>`;
-  if(can('edit')) return `<div style="margin-top:12px"><button class="btn sm" onclick="requestClose('${c.id}')">ขอปิดเคส (ส่งให้ Admin / Manager อนุมัติ)</button></div>`;
-  return '';
+  if(can('close')) return hoLine + `<div style="margin-top:12px"><button class="btn sm primary" onclick="openSignHandover('${c.id}','close')">✓ Close เคส + ใบส่งมอบงาน</button></div>`;
+  if(can('edit')) return hoLine + `<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm primary" onclick="openSignHandover('${c.id}','request')">✍️ ลูกค้าเซ็นใบส่งมอบ + ขอปิดเคส</button><button class="btn sm" onclick="requestClose('${c.id}')">ขอปิดเคส (ไม่เซ็น)</button></div>`;
+  return hoLine;
 }
 async function afterCase(id){ await loadAll(); if(openCaseId===id) openCase(id, true); }
 async function requestClose(id){
@@ -812,7 +819,9 @@ async function requestClose(id){
   await addLog(id, '🔔 ขอปิดเคส'+(note.trim()?': '+note.trim():'')); toast('ส่งคำขอปิดเคสแล้ว รอ Admin / Manager อนุมัติ'); afterCase(id);
 }
 async function approveClose(id){
-  const c=DB.cases.find(x=>x.id===id); if(!confirm(`อนุมัติปิดเคส ${c.code}?`)) return;
+  const c=DB.cases.find(x=>x.id===id);
+  if(!c.handover?.signedAt) return openSignHandover(id,'approve');
+  if(!confirm(`อนุมัติปิดเคส ${c.code}? (ลูกค้าเซ็นใบส่งมอบแล้ว)`)) return;
   await q(sb.from('cases').update({status:'closed', closed_at:todayISO(), close_requested_at:null}).eq('id',id), 'อนุมัติปิดเคส');
   await addLog(id, `✅ อนุมัติปิดเคส (คำขอจาก ${c.closeReqBy})`); toast('ปิดเคสแล้ว'); afterCase(id);
 }
@@ -820,6 +829,110 @@ async function rejectClose(id){
   const why = prompt('เหตุผลที่ไม่อนุมัติ (จะแจ้งในประวัติเคส)', ''); if(why===null) return;
   await q(sb.from('cases').update({close_requested_at:null, close_requested_by:'', close_request_note:''}).eq('id',id), 'ไม่อนุมัติ');
   await addLog(id, '❌ ไม่อนุมัติปิดเคส'+(why.trim()?': '+why.trim():'')); toast('ส่งกลับแล้ว'); afterCase(id);
+}
+/* ---------- ใบส่งมอบงาน + ลายเซ็น ---------- */
+function sigPad(canvas){
+  const ctx=canvas.getContext('2d'); let drawing=false, dirty=false, last=null;
+  const fit=()=>{ const r=canvas.getBoundingClientRect(), dpr=window.devicePixelRatio||1; canvas.width=r.width*dpr; canvas.height=r.height*dpr; ctx.scale(dpr,dpr); ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.strokeStyle='#111'; };
+  fit();
+  const pos=e=>{ const r=canvas.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; };
+  canvas.onpointerdown=e=>{ drawing=true; last=pos(e); canvas.setPointerCapture(e.pointerId); e.preventDefault(); };
+  canvas.onpointermove=e=>{ if(!drawing) return; const p=pos(e); ctx.beginPath(); ctx.moveTo(last.x,last.y); ctx.lineTo(p.x,p.y); ctx.stroke(); last=p; dirty=true; e.preventDefault(); };
+  canvas.onpointerup=canvas.onpointercancel=()=>{ drawing=false; };
+  return { clear(){ ctx.clearRect(0,0,canvas.width,canvas.height); dirty=false; }, isEmpty:()=>!dirty,
+    toBlob:()=>new Promise(r=>{ const out=document.createElement('canvas'); out.width=canvas.width; out.height=canvas.height; const o=out.getContext('2d'); o.fillStyle='#fff'; o.fillRect(0,0,out.width,out.height); o.drawImage(canvas,0,0); out.toBlob(r,'image/png'); }) };
+}
+function openSignHandover(id, mode){
+  // mode: close (Admin/Manager ปิดเอง) | approve (อนุมัติคำขอ) | request (CS/ช่าง เซ็นแล้วส่งขออนุมัติ) | sign/resign (เคสปิดแล้ว เก็บลายเซ็น)
+  const c=DB.cases.find(x=>x.id===id), cu=customer(c.customerId);
+  const ho=c.handover||{};
+  const titles={close:'ปิดเคส + ใบส่งมอบงาน',approve:'อนุมัติปิดเคส + ใบส่งมอบงาน',request:'ใบส่งมอบงาน + ขอปิดเคส',sign:'ให้ลูกค้าเซ็นใบส่งมอบงาน',resign:'เซ็นใบส่งมอบงานใหม่'};
+  const canSkip = mode==='close'||mode==='approve';
+  modal(`<button class="x" onclick="closeAll()">×</button><h2>${titles[mode]}</h2>
+  <p class="sub"><span class="mono">${esc(c.code)}</span> · ${esc(cu.house||'')} ${esc(cu.name)}</p>
+  <div class="panel" style="margin-top:12px;padding:14px;font-size:13px">
+    <b>${esc(c.title)}</b><div class="sub">${esc(c.category)}${c.subcategory?' · '+esc(c.subcategory):''}${c.location?' · '+esc(c.location):''}</div>
+    ${c.detail?`<div style="margin-top:6px">${esc(c.detail)}</div>`:''}
+    <div class="sub" style="margin-top:6px">เปิดเคส ${thDate(c.openedAt)}${c.visitedAt?' · เข้าแก้ '+thDate(c.visitedAt):''}${c.fixContractor?' · เข้าแก้โดย '+esc(c.fixContractor):''}</div>
+  </div>
+  <form class="form" id="hof" style="margin-top:12px">
+    <label class="full">ผลการแก้ไข / สรุปงานที่ทำ<textarea name="workSummary" placeholder="เช่น เปลี่ยนท่อ PPR ช่วงที่รั่ว ทดสอบแรงดันน้ำแล้วไม่รั่วซึม">${esc(ho.workSummary||c.closeReqNote||'')}</textarea></label>
+    <label class="full" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="accepted" ${ho.accepted===false?'':'checked'}> ลูกค้าตรวจสอบงานแล้ว และยอมรับการส่งมอบงาน</label>
+    <label class="full">หมายเหตุจากลูกค้า (ถ้ามี)<input name="customerRemark" value="${esc(ho.customerRemark||'')}"></label>
+    <label>ชื่อผู้รับมอบงาน (ลูกค้า) *<input name="customerName" required value="${esc(ho.customerName||cu.name||'')}"></label>
+    <label>ชื่อเจ้าหน้าที่ผู้ส่งมอบ *<input name="staffName" required value="${esc(ho.staffName||me().name||'')}"></label>
+    <div class="full sig-grid">
+      <div><div class="sig-label">ลายเซ็นลูกค้า * <button type="button" class="btn sm" data-clear="cust">ล้าง</button></div><canvas class="sig" id="sig-cust"></canvas></div>
+      <div><div class="sig-label">ลายเซ็นเจ้าหน้าที่ <button type="button" class="btn sm" data-clear="staff">ล้าง</button></div><canvas class="sig" id="sig-staff"></canvas></div>
+    </div>
+    <div class="actions full">
+      ${canSkip?`<button type="button" class="btn" id="ho-skip" style="margin-right:auto">ปิดเคสโดยยังไม่เซ็น</button>`:''}
+      <button type="button" class="btn" onclick="closeAll()">ยกเลิก</button>
+      <button class="btn primary">${mode==='request'?'บันทึก + ขอปิดเคส':mode==='sign'||mode==='resign'?'บันทึกลายเซ็น':'บันทึก + ปิดเคส'}</button>
+    </div>
+  </form>`);
+  $('#modal').style.width='min(760px, calc(100vw - 32px))';
+  const pads={cust:sigPad($('#sig-cust')), staff:sigPad($('#sig-staff'))};
+  document.querySelectorAll('[data-clear]').forEach(b=>b.onclick=()=>pads[b.dataset.clear].clear());
+  if($('#ho-skip')) $('#ho-skip').onclick=async()=>{ if(!confirm('ปิดเคสโดยยังไม่มีลายเซ็นลูกค้า? (ให้เซ็นภายหลังได้ในหน้าเคส)')) return; await finishClose(c, mode, null); };
+  $('#hof').onsubmit=async e=>{
+    e.preventDefault(); const btn=e.submitter;
+    if(pads.cust.isEmpty()) return alert('กรุณาให้ลูกค้าเซ็นชื่อในช่อง "ลายเซ็นลูกค้า"');
+    const d=Object.fromEntries(new FormData(e.target));
+    busy(btn,true);
+    try{
+      const ts=Date.now(), up=async(pad,who)=>{ if(pad.isEmpty()) return ''; const path=`${id}/handover-${ts}-${who}.png`; await q(sb.storage.from(BUCKET).upload(path, await pad.toBlob(), {contentType:'image/png'}), 'อัปโหลดลายเซ็น'); return path; };
+      const handover={ signedAt:new Date().toISOString(), customerName:d.customerName.trim(), staffName:d.staffName.trim(), workSummary:d.workSummary.trim(),
+        customerRemark:d.customerRemark.trim(), accepted:!!d.accepted, sigCustomer:await up(pads.cust,'customer'), sigStaff:await up(pads.staff,'staff'), recordedBy:me().name||me().email };
+      await finishClose(c, mode, handover);
+    }finally{ busy(btn,false); }
+  };
+}
+async function finishClose(c, mode, handover){
+  const id=c.id, patch={};
+  if(handover) patch.handover=handover;
+  const closing = mode==='close'||mode==='approve';
+  if(closing){ patch.status='closed'; patch.closed_at=todayISO(); patch.close_requested_at=null; }
+  if(mode==='request'){ patch.close_requested_at=new Date().toISOString(); patch.close_requested_by=me().name||me().email; patch.close_request_note=handover?.workSummary||'ลูกค้าเซ็นใบส่งมอบแล้ว'; }
+  await q(sb.from('cases').update(patch).eq('id',id), 'บันทึกใบส่งมอบ');
+  if(handover) await addLog(id, `✍️ ลูกค้าเซ็นใบส่งมอบงาน (${handover.customerName})${handover.accepted?'':' · ยังไม่ยอมรับงาน'}${handover.workSummary?': '+handover.workSummary:''}`);
+  if(mode==='close') await addLog(id, '✅ ปิดเคส'+(handover?'':' (ยังไม่มีลายเซ็นลูกค้า)'));
+  if(mode==='approve') await addLog(id, `✅ อนุมัติปิดเคส (คำขอจาก ${c.closeReqBy})`+(handover?'':' · ยังไม่มีลายเซ็นลูกค้า'));
+  if(mode==='request') await addLog(id, '🔔 ขอปิดเคส (แนบใบส่งมอบที่ลูกค้าเซ็นแล้ว)');
+  closeAll();
+  toast(closing?'ปิดเคสแล้ว':mode==='request'?'ส่งคำขอปิดเคสแล้ว รอ Admin / Manager อนุมัติ':'บันทึกลายเซ็นแล้ว');
+  await loadAll(); openCase(id, true);
+  if(handover && confirm('บันทึกใบส่งมอบงานแล้ว ต้องการพิมพ์ / บันทึกเป็น PDF เลยไหม?')) printCaseHandover(id);
+}
+async function printCaseHandover(id){
+  const c=DB.cases.find(x=>x.id===id), cu=customer(c.customerId), ho=c.handover; if(!ho) return toast('ยังไม่มีใบส่งมอบงาน');
+  try{ await loadScript('assets/brand.js'); }catch(e){}
+  const paths=[ho.sigCustomer, ho.sigStaff, ...c.photos.map(p=>p.path)].filter(Boolean);
+  const urls={}; if(paths.length){ const {data}=await sb.storage.from(BUCKET).createSignedUrls(paths, 3600); (data||[]).forEach(x=>urls[x.path]=x.signedUrl); }
+  const photos=c.photos.filter(p=>urls[p.path]).slice(0,6);
+  $('#print-area').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #C00000;padding-bottom:8px;margin-bottom:12px">
+      <div><div style="font-size:20px;font-weight:700;color:#C00000">ใบส่งมอบงานบริการหลังการขาย</div><div style="font-size:12px">Aftersale Service · เลขที่ ${esc(c.code)}</div></div>
+      ${window.AFS_BRAND?`<img src="${window.AFS_BRAND.logo}" style="height:48px">`:''}
+    </div>
+    <table style="width:100%;margin-bottom:10px"><tbody>
+      <tr><td style="width:20%"><b>ลูกค้า</b></td><td>${esc(cu.name)}</td><td style="width:18%"><b>รหัสบ้านลูกค้า</b></td><td>${esc(cu.house||'-')}</td></tr>
+      <tr><td><b>เรื่องที่แจ้ง</b></td><td colspan="3">${esc(c.title)}${c.detail?'<br><small>'+esc(c.detail)+'</small>':''}</td></tr>
+      <tr><td><b>หมวดงาน</b></td><td>${esc(c.category)}${c.subcategory?'<br><small>'+esc(c.subcategory)+'</small>':''}</td><td><b>Warranty</b></td><td>${esc(c.warranty||'-')}</td></tr>
+      <tr><td><b>วันที่แจ้ง</b></td><td>${thDate(c.openedAt)}</td><td><b>วันที่เข้าแก้ไข</b></td><td>${thDate(c.visitedAt)}</td></tr>
+      <tr><td><b>เข้าแก้ไขโดย</b></td><td>${esc(c.fixContractor||'-')}</td><td><b>ผู้รับผิดชอบ</b></td><td>${esc(c.assignee||'-')}</td></tr>
+      <tr><td><b>ผลการแก้ไข</b></td><td colspan="3">${esc(ho.workSummary||'-')}</td></tr>
+      ${ho.customerRemark?`<tr><td><b>หมายเหตุลูกค้า</b></td><td colspan="3">${esc(ho.customerRemark)}</td></tr>`:''}
+    </tbody></table>
+    ${photos.length?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${photos.map(p=>`<figure style="margin:0;width:31%"><img src="${urls[p.path]}" style="width:100%;height:120px;object-fit:cover;border:1px solid #999"><figcaption style="font-size:11px;text-align:center">${p.tag==='before'?'ก่อนแก้ไข':'หลังแก้ไข'}</figcaption></figure>`).join('')}</div>`:''}
+    <p style="margin:10px 0">${ho.accepted?'☑':'☐'} ข้าพเจ้าได้ตรวจสอบงานแก้ไขตามรายการข้างต้นแล้ว และยอมรับการส่งมอบงาน</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:20px;text-align:center">
+      <div>${urls[ho.sigCustomer]?`<img src="${urls[ho.sigCustomer]}" style="height:80px;max-width:100%">`:'<div style="height:80px"></div>'}<div style="border-top:1px solid #000;padding-top:4px">(${esc(ho.customerName)})<br>ลูกค้า / ผู้รับมอบงาน<br>วันที่ ${thDateLong(localISO(new Date(ho.signedAt)))}</div></div>
+      <div>${urls[ho.sigStaff]?`<img src="${urls[ho.sigStaff]}" style="height:80px;max-width:100%">`:'<div style="height:80px"></div>'}<div style="border-top:1px solid #000;padding-top:4px">(${esc(ho.staffName)})<br>เจ้าหน้าที่ Aftersale Service<br>วันที่ ${thDateLong(localISO(new Date(ho.signedAt)))}</div></div>
+    </div>`;
+  const imgs=[...$('#print-area').querySelectorAll('img')];
+  await Promise.all(imgs.map(i=>i.complete?1:new Promise(r=>{ i.onload=i.onerror=r; })));
+  document.title=`ใบส่งมอบงาน_${c.code}`; window.print(); document.title='Aftersale Service | จัดการเคสบริการหลังการขาย';
 }
 async function closeCase(id){
   const c=DB.cases.find(x=>x.id===id); const note = prompt(`ปิดเคส ${c.code} — สรุปผลงาน (ไม่บังคับ)`, ''); if(note===null) return;
@@ -958,7 +1071,7 @@ $('#file-backup').onchange = async e=>{
 };
 
 /* ============ MODAL HELPERS ============ */
-function modal(html){ $('#modal').innerHTML=html; $('#modal').classList.add('open'); $('#overlay').classList.add('open'); }
+function modal(html){ $('#modal').style.width=''; $('#modal').innerHTML=html; $('#modal').classList.add('open'); $('#overlay').classList.add('open'); }
 function closeAll(){ ['#modal','#drawer','#overlay'].forEach(s=>$(s).classList.remove('open')); openCaseId=null; }
 $('#overlay').onclick=closeAll;
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeAll(); });
@@ -1180,6 +1293,8 @@ async function openCase(id, silent){
     if(d.fixContractor!==cur.fixContractor) changes.push(`เข้าแก้โดย: ${d.fixContractor||'-'}`);
     if(String(d.claimCost)!==String(cur.claimCost)) changes.push(`มูลค่างาน Claim: ${d.claimCost?fmtMoney(d.claimCost)+' บาท':'-'}`);
     const note=d.note.trim();
+    const toClose = d.status==='closed' && cur.status!=='closed';
+    if(toClose){ d.status=cur.status; changes.splice(0,1); }
     try{
       const patch = {status:d.status, assignee:d.assignee, priority:d.priority, category:d.category, due_at:d.dueAt||null, location:d.location, title:d.title, detail:d.detail,
         subcategory:d.subcategory, warranty:d.warranty, orig_contractor:d.origContractor, fix_contractor:d.fixContractor, visit_due:d.visitDue||null, visited_at:d.visitedAt||null, claim_cost:d.claimCost===''?null:Number(d.claimCost)};
@@ -1188,6 +1303,7 @@ async function openCase(id, silent){
       if(changes.length) await addLog(id, changes.join(' · '));
       if(note) await addLog(id, '📝 '+note);
       toast('บันทึกแล้ว'); await loadAll(); openCase(id, true);
+      if(toClose) openSignHandover(id,'close');
     }finally{ busy(btn,false); }
   };
 }
