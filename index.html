@@ -174,6 +174,15 @@ tbody tr:last-child td{border-bottom:0}
 }
 </style>
 <style>
+.chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.chip{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:5px 12px;font-size:13px;color:var(--muted)}
+.chip b{color:var(--ink);margin-left:2px}
+.chip.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.chip.on b{color:#fff}
+.cust-table th[data-sort]{cursor:pointer;user-select:none}
+.cust-table th[data-sort]:hover{color:var(--ink)}
+.cust-table .num{text-align:center}
+.toolbar select{min-width:160px}
 .auth-screen{position:fixed;inset:0;background:var(--bg);z-index:80;display:grid;place-items:center;padding:16px}
 .auth-card{width:min(420px,100%);background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:28px}
 .auth-card .brand{display:flex;gap:12px;align-items:center;margin-bottom:18px}
@@ -370,7 +379,9 @@ async function loadAll(){
     sb.from('case_logs').select('*').order('ts'),
     sb.from('profiles').select('*').order('created_at'),
   ]);
-  for(const r of [cu,ca,lg,us]) if(r.error){ console.error(r.error); toast('โหลดข้อมูลไม่สำเร็จ: '+r.error.message); return; }
+  const bad=[cu,ca,lg,us].find(r=>r.error);
+  if(bad){ console.error(bad.error); if(!$('#app').classList.contains('hidden')) return toast('โหลดข้อมูลไม่สำเร็จ: '+bad.error.message);
+    $('#loading').innerHTML=`<div class="auth-card"><h2>โหลดข้อมูลไม่สำเร็จ</h2><p class="sub">${esc(bad.error.message)}</p><div class="actions"><button class="btn" onclick="signOut()">ออกจากระบบ</button><button class="btn primary" onclick="location.reload()">ลองใหม่</button></div></div>`; return; }
   DB.customers = cu.data.map(fromCust);
   DB.cases = ca.data.map(fromCase);
   DB.users = us.data;
@@ -457,34 +468,69 @@ function renderOverall(){
 }
 
 /* ============ PROJECTS ============ */
-let projQ = '';
+let projQ = '', projFilter = 'all', projProject = '', projSort = {key:'over', dir:-1};
+const PROJ_COLS = [
+  {key:'name', label:'ชื่อลูกค้า'}, {key:'project', label:'โครงการ'}, {key:'house', label:'บ้านเลขที่'},
+  {key:'phone', label:'โทรศัพท์'}, {key:'total', label:'เคสทั้งหมด', num:1}, {key:'open', label:'กำลังติดตาม', num:1},
+  {key:'over', label:'เกินกำหนด', num:1}, {key:'closed', label:'ปิดแล้ว', num:1}, {key:'warranty', label:'ประกัน'},
+];
+function custRows(){
+  const t=todayISO();
+  return DB.customers.map(c=>{ const cs=DB.cases.filter(x=>x.customerId===c.id);
+    const wEnd = c.handoverDate ? addDays(c.handoverDate,365) : '';
+    return {c, name:c.name, project:c.project, house:c.house, phone:c.phone, total:cs.length, closed:cs.filter(x=>!isOpen(x)).length,
+      open:cs.filter(isOpen).length, over:cs.filter(isOverdue).length, wEnd, warranty: wEnd ? (wEnd>=t?1:0) : -1}; });
+}
 function renderProjects(){
-  const list = DB.customers.map(c=>{ const cs=DB.cases.filter(x=>x.customerId===c.id); return {c, total:cs.length, closed:cs.filter(x=>!isOpen(x)).length, open:cs.filter(isOpen).length, over:cs.filter(isOverdue).length}; })
-    .sort((a,b)=>b.total-a.total || b.over-a.over || a.c.name.localeCompare(b.c.name,'th'));
-  $('#view').innerHTML = head('ติดตามตามโครงการ','โครงการ / บ้านลูกค้า','เลือกบ้านเพื่อดูเคสทั้งหมดของโครงการ') + `
+  const all = custRows();
+  const projects = [...new Set(DB.customers.map(c=>c.project).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
+  const chips = [['all','ทั้งหมด',all.length],['open','มีเคสค้าง',all.filter(r=>r.open).length],['over','เกินกำหนด',all.filter(r=>r.over).length],['none','ยังไม่มีเคส',all.filter(r=>!r.total).length]];
+  $('#view').innerHTML = head('ติดตามตามโครงการ','โครงการ / บ้านลูกค้า','ค้นหาบ้านเพื่อดูเคสทั้งหมดและออกใบส่งมอบงาน') + `
   <section class="project-section">
-    <div class="records-head"><div><h2>โครงการ / บ้าน</h2><p>เลือกโครงการเพื่อดูเคสและออกใบส่งมอบงาน</p></div>
+    <div class="records-head"><div><h2>โครงการ / บ้าน</h2><p>คลิกแถวเพื่อดูเคสของบ้านนั้น · คลิกหัวคอลัมน์เพื่อเรียง</p></div>
       <div class="customer-actions">
-        <span class="count">${list.length} โครงการ</span>
-        <input id="proj-q" placeholder="ค้นหาชื่อลูกค้า / โครงการ" value="${esc(projQ)}" style="height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px">
         <button class="btn" onclick="openCustomerForm()" ${can('import')?'':'disabled'}>+ เพิ่มลูกค้า</button>
         <button class="btn" id="btn-upload" ${can('import')?'':'disabled'}>${I.upload} อัปโหลด Customer Data</button>
       </div>
     </div>
-    <div class="project-grid" id="project-grid">
-      ${list.map(({c,total,closed,open,over})=>`
-      <button class="project-card" data-id="${c.id}" data-name="${esc((c.name+' '+c.project+' '+c.house).toLowerCase())}">
-        <div class="project-top"><span>${esc([c.project,c.house].filter(Boolean).join(' · '))}</span><span>ดูเคส →</span></div>
-        <h3>${esc(c.name)}</h3>
-        <p>${total} เคสทั้งหมด · ${closed} ปิดแล้ว</p>
-        <footer><span>${open} เคสกำลังติดตาม</span>${over?`<strong>${over} เกินกำหนด</strong>`:''}</footer>
-      </button>`).join('') || '<div class="empty">ยังไม่มีลูกค้า กด “อัปโหลด Customer Data” หรือ “+ เพิ่มลูกค้า”</div>'}
+    <div class="toolbar">
+      <input id="proj-q" placeholder="ค้นหาชื่อลูกค้า โครงการ บ้านเลขที่ หรือเบอร์โทร" value="${esc(projQ)}">
+      ${projects.length?`<select id="proj-project"><option value="">ทุกโครงการ</option>${projects.map(p=>`<option ${p===projProject?'selected':''}>${esc(p)}</option>`).join('')}</select>`:''}
     </div>
+    <div class="chips">${chips.map(([k,l,n])=>`<button class="chip ${projFilter===k?'on':''}" data-f="${k}">${l} <b>${n}</b></button>`).join('')}<span class="sub" id="proj-count" style="margin-left:auto"></span></div>
+    <div id="proj-table"></div>
   </section>`;
-  document.querySelectorAll('.project-card').forEach(b=>b.onclick=()=>go('projects',{customerId:b.dataset.id}));
   $('#btn-upload').onclick=()=>$('#file-customers').click();
-  const filt=()=>{ const q=projQ.toLowerCase().trim(); document.querySelectorAll('.project-card').forEach(card=>card.classList.toggle('hidden', !!q && !card.dataset.name.includes(q))); };
-  $('#proj-q').oninput=e=>{ projQ=e.target.value; filt(); }; filt();
+  const draw = () => {
+    const q = projQ.toLowerCase().trim();
+    const rows = all.filter(r=>
+      (projFilter==='all' || (projFilter==='open'&&r.open) || (projFilter==='over'&&r.over) || (projFilter==='none'&&!r.total)) &&
+      (!projProject || r.project===projProject) &&
+      (!q || [r.name,r.project,r.house,r.phone].join(' ').toLowerCase().includes(q))
+    );
+    const {key,dir} = projSort; const col = PROJ_COLS.find(c=>c.key===key);
+    rows.sort((a,b)=> (col?.num||key==='warranty' ? (a[key]-b[key]) : String(a[key]||'').localeCompare(String(b[key]||''),'th')) * dir
+      || b.over-a.over || b.open-a.open || a.name.localeCompare(b.name,'th'));
+    $('#proj-count').textContent = `แสดง ${rows.length} จาก ${all.length} บ้าน`;
+    const arrow = k => projSort.key===k ? (projSort.dir>0?' ▲':' ▼') : '';
+    $('#proj-table').innerHTML = !all.length
+      ? '<div class="table-wrap"><div class="empty">ยังไม่มีลูกค้า กด “อัปโหลด Customer Data” หรือ “+ เพิ่มลูกค้า”</div></div>'
+      : `<div class="table-wrap"><table class="cust-table"><thead><tr>${PROJ_COLS.map(c=>`<th data-sort="${c.key}" class="${c.num?'num':''}">${c.label}${arrow(c.key)}</th>`).join('')}</tr></thead><tbody>
+        ${rows.map(r=>`<tr data-cust="${r.c.id}">
+          <td><b>${esc(r.name)}</b></td><td>${esc(r.project||'-')}</td><td>${esc(r.house||'-')}</td><td style="white-space:nowrap">${esc(r.phone||'-')}</td>
+          <td class="num">${r.total}</td><td class="num">${r.open||'<span class="sub">0</span>'}</td>
+          <td class="num">${r.over?`<span class="badge b-red">${r.over}</span>`:'<span class="sub">0</span>'}</td>
+          <td class="num">${r.closed||'<span class="sub">0</span>'}</td>
+          <td style="white-space:nowrap">${r.warranty===1?`<span class="badge b-green">ถึง ${thDate(r.wEnd)}</span>`:r.warranty===0?'<span class="badge b-gray">หมดประกัน</span>':'<span class="sub">-</span>'}</td>
+        </tr>`).join('') || `<tr><td colspan="${PROJ_COLS.length}" class="empty">ไม่พบบ้านที่ตรงกับการค้นหา</td></tr>`}
+        </tbody></table></div>`;
+    document.querySelectorAll('tr[data-cust]').forEach(tr=>tr.onclick=()=>go('projects',{customerId:tr.dataset.cust}));
+    document.querySelectorAll('th[data-sort]').forEach(th=>th.onclick=()=>{ const k=th.dataset.sort; projSort = projSort.key===k ? {key:k, dir:-projSort.dir} : {key:k, dir: PROJ_COLS.find(c=>c.key===k).num||k==='warranty' ? -1 : 1}; draw(); });
+  };
+  $('#proj-q').oninput=e=>{ projQ=e.target.value; draw(); };
+  if($('#proj-project')) $('#proj-project').onchange=e=>{ projProject=e.target.value; draw(); };
+  document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ projFilter=ch.dataset.f; document.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===ch)); draw(); });
+  draw();
 }
 function renderProject(){
   const c = customer(view.customerId);
