@@ -1,0 +1,960 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aftersale Service | จัดการเคสบริการหลังการขาย</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231f4fd1'/%3E%3Cpath d='M9 17l5 5 9-11' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+<style>
+:root{
+  --bg:#f4f6fa; --panel:#ffffff; --ink:#111827; --muted:#6b7280; --line:#e5e7eb;
+  --side:#0f1b33; --side-ink:#c7d0e3; --side-active:#1f4fd1;
+  --primary:#1f4fd1; --primary-ink:#fff; --primary-soft:#e8eefc;
+  --red:#d92d20; --red-soft:#fdecea; --orange:#e97817; --orange-soft:#fdf0e3;
+  --blue:#2563eb; --blue-soft:#e6efff; --green:#12895a; --green-soft:#e3f5ec;
+  --violet:#7c3aed; --violet-soft:#f0e9fe; --gray-soft:#f1f3f6;
+  --radius:12px; --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:"IBM Plex Sans Thai",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5}
+button{font:inherit;cursor:pointer}
+input,select,textarea{font:inherit;color:inherit}
+.shell{display:flex;min-height:100vh}
+/* sidebar */
+.app-sidebar{width:248px;flex:none;background:var(--side);color:var(--side-ink);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.sidebar-brand{display:flex;gap:12px;align-items:center;padding:22px 20px 18px;border-bottom:1px solid rgba(255,255,255,.07)}
+.brand-mark{width:38px;height:38px;border-radius:10px;background:var(--primary);display:grid;place-items:center;color:#fff}
+.sidebar-brand strong{display:block;color:#fff;font-size:15px}
+.sidebar-brand small{color:#8c98b3}
+.app-sidebar nav{padding:14px 12px;display:flex;flex-direction:column;gap:4px}
+.app-sidebar nav button{display:flex;align-items:center;gap:10px;border:0;background:none;color:var(--side-ink);padding:10px 12px;border-radius:8px;text-align:left;font-size:14px}
+.app-sidebar nav button:hover{background:rgba(255,255,255,.06);color:#fff}
+.app-sidebar nav button.active{background:var(--side-active);color:#fff}
+.app-sidebar nav svg{width:18px;height:18px;flex:none}
+.sidebar-user{margin-top:auto;padding:14px 16px;border-top:1px solid rgba(255,255,255,.07);font-size:12px}
+.sidebar-user select{width:100%;margin-top:6px;background:#17264a;border:1px solid #2a3b63;color:#fff;border-radius:8px;padding:7px 8px}
+.sidebar-footer{padding:10px 20px 16px;font-size:12px;color:#5f6c8a}
+/* main */
+.app-main{flex:1;min-width:0;display:flex;flex-direction:column}
+.top{height:60px;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:5}
+.top-label{font-weight:600}
+.header-right{display:flex;align-items:center;gap:14px}
+.live{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px}
+.live span{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px #dcfce7}
+.menu-btn{display:none;border:0;background:none;padding:6px}
+.content{padding:28px;max-width:1320px;width:100%}
+.page-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:22px}
+.eyebrow{display:flex;align-items:center;gap:6px;color:var(--primary);font-weight:600;font-size:13px}
+.page-head h1{margin:4px 0 2px;font-size:26px;line-height:1.25}
+.page-head p{margin:0;color:var(--muted)}
+.today{color:var(--muted);font-size:13px;background:var(--panel);border:1px solid var(--line);padding:6px 12px;border-radius:999px;white-space:nowrap}
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font-weight:500;white-space:nowrap}
+.btn:hover{background:#f8fafc}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.primary:hover{background:#1a43b3}
+.btn.danger{color:var(--red);border-color:#f5c2bd}
+.btn.sm{height:30px;padding:0 10px;font-size:13px}
+.btn svg{width:16px;height:16px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+/* panels */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px}
+.records-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.records-head h2{margin:0;font-size:18px}
+.records-head p{margin:2px 0 0;color:var(--muted)}
+.customer-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.count{background:var(--gray-soft);border-radius:999px;padding:4px 12px;font-size:13px;color:var(--muted)}
+/* project grid */
+.project-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.project-card{text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:4px;transition:.15s}
+.project-card:hover{border-color:var(--primary);transform:translateY(-1px)}
+.project-top{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted)}
+.project-top span:last-child{color:var(--primary);font-weight:500}
+.project-card h3{margin:6px 0 0;font-size:15px}
+.project-card p{margin:0;color:var(--muted);font-size:13px}
+.project-card footer{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted)}
+.project-card footer strong{color:var(--red);font-weight:600}
+/* kpis */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:18px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+.kpi small{color:var(--muted);font-size:13px}
+.kpi b{display:block;font-size:28px;margin-top:4px;line-height:1.2}
+.kpi i{font-style:normal;font-size:12px;color:var(--muted)}
+.kpi.red b{color:var(--red)} .kpi.green b{color:var(--green)} .kpi.blue b{color:var(--primary)}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.bars{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.bar-row{display:grid;grid-template-columns:150px 1fr 36px;gap:10px;align-items:center;font-size:13px}
+.bar-track{height:10px;background:var(--gray-soft);border-radius:999px;overflow:hidden}
+.bar-fill{height:100%;border-radius:999px;background:var(--primary)}
+.bar-row b{text-align:right}
+.panel h3{margin:0;font-size:16px}
+.panel .sub{color:var(--muted);font-size:13px;margin:2px 0 0}
+/* table */
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.toolbar input,.toolbar select{height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:var(--panel)}
+.toolbar input{flex:1;min-width:200px}
+.table-wrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:600;color:var(--muted);background:#f9fafb;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:#f8fafc}
+tbody tr:last-child td{border-bottom:0}
+.mono{white-space:nowrap;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted)}
+.empty{padding:40px;text-align:center;color:var(--muted)}
+/* badges */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
+.b-red{background:var(--red-soft);color:var(--red)} .b-orange{background:var(--orange-soft);color:var(--orange)}
+.b-blue{background:var(--blue-soft);color:var(--blue)} .b-green{background:var(--green-soft);color:var(--green)}
+.b-violet{background:var(--violet-soft);color:var(--violet)} .b-gray{background:var(--gray-soft);color:#4b5563}
+.overdue{color:var(--red);font-weight:600}
+/* detail */
+.back{border:0;background:none;color:var(--primary);padding:0;margin-bottom:10px;font-weight:500}
+.info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px 20px;margin-top:12px}
+.info-grid div small{display:block;color:var(--muted);font-size:12px}
+/* modal / drawer */
+.overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;z-index:50}
+.overlay.open{display:block}
+.modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;background:var(--panel);border-radius:14px;padding:22px;z-index:51;display:none}
+.modal.open{display:block}
+.modal h2{margin:0 0 4px;font-size:19px}
+.drawer{position:fixed;right:0;top:0;height:100vh;width:min(560px,100vw);background:var(--panel);z-index:51;transform:translateX(100%);transition:transform .2s;overflow:auto;padding:22px;box-shadow:-8px 0 24px rgba(0,0,0,.08)}
+.drawer.open{transform:none}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.form label{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:500}
+.form .full{grid-column:1/-1}
+.form input,.form select,.form textarea{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fff;font-weight:400}
+.form textarea{min-height:80px;resize:vertical}
+.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;flex-wrap:wrap}
+.x{float:right;border:0;background:none;font-size:22px;line-height:1;color:var(--muted)}
+.timeline{list-style:none;padding:0;margin:10px 0 0}
+.timeline li{border-left:2px solid var(--line);padding:0 0 12px 14px;position:relative;font-size:13px}
+.timeline li::before{content:"";position:absolute;left:-6px;top:5px;width:10px;height:10px;border-radius:50%;background:var(--primary)}
+.timeline li small{color:var(--muted)}
+.photos{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.photos figure{margin:0;width:110px;position:relative}
+.photos img{width:110px;height:82px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in}
+.photos figcaption{font-size:11px;color:var(--muted)}
+.photos .del{position:absolute;top:2px;right:2px;border:0;background:rgba(0,0,0,.6);color:#fff;border-radius:6px;font-size:11px;padding:1px 5px}
+.section-title{font-weight:600;margin:20px 0 4px;font-size:14px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 16px;border-radius:10px;z-index:99;display:none;font-size:13px}
+.perm{display:grid;grid-template-columns:1.6fr repeat(4,1fr);font-size:13px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.perm div{padding:8px 10px;border-bottom:1px solid var(--line)}
+.perm .h{background:#f9fafb;font-weight:600;color:var(--muted)}
+.perm .c{text-align:center}
+.notice{background:var(--primary-soft);color:#1e3a8a;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px}
+.hidden{display:none!important}
+/* print: handover doc */
+#print-area{display:none}
+@media print{
+  body{background:#fff}
+  .shell,.overlay,.modal,.drawer,.toast{display:none!important}
+  #print-area{display:block;font-size:13px;color:#000}
+  #print-area h1{font-size:20px;text-align:center;margin:0 0 4px}
+  #print-area table{border:1px solid #000}
+  #print-area th,#print-area td{border:1px solid #000;color:#000;background:#fff}
+  .sign{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:60px;text-align:center}
+}
+@media (max-width:900px){
+  .app-sidebar{position:fixed;left:0;top:0;z-index:60;transform:translateX(-100%);transition:transform .2s}
+  .app-sidebar.open{transform:none}
+  .menu-btn{display:inline-flex}
+  .top{padding:0 16px}
+  .content{padding:18px 16px}
+  .grid-2{grid-template-columns:1fr}
+  .form{grid-template-columns:1fr}
+  .page-head{flex-direction:column;align-items:flex-start}
+  .live{display:none}
+  .bar-row{grid-template-columns:110px 1fr 30px}
+}
+</style>
+<style>
+.auth-screen{position:fixed;inset:0;background:var(--bg);z-index:80;display:grid;place-items:center;padding:16px}
+.auth-card{width:min(420px,100%);background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:28px}
+.auth-card .brand{display:flex;gap:12px;align-items:center;margin-bottom:18px}
+.auth-card .brand .brand-mark{flex:none}
+.auth-card h2{margin:0;font-size:20px}
+.auth-card .form{grid-template-columns:1fr}
+.tabs{display:flex;gap:4px;background:var(--gray-soft);padding:4px;border-radius:10px;margin-top:6px}
+.tabs button{flex:1;border:0;background:none;padding:7px;border-radius:8px;color:var(--muted)}
+.tabs button.on{background:#fff;color:var(--ink);font-weight:600;box-shadow:var(--shadow)}
+.err{color:var(--red);font-size:13px;min-height:18px}
+.live.off span{background:#9ca3af;box-shadow:0 0 0 3px #e5e7eb}
+.loading{position:fixed;inset:0;display:grid;place-items:center;background:var(--bg);z-index:90;color:var(--muted)}
+.me-box{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;color:#fff}
+.me-box small{color:#8c98b3;display:block}
+.me-box button{background:#17264a;border:1px solid #2a3b63;color:#c7d0e3;border-radius:8px;padding:5px 9px;font-size:12px}
+.role-sel{border:1px solid var(--line);border-radius:8px;padding:4px 6px;background:#fff}
+</style>
+</head>
+<body>
+<div class="loading" id="loading">กำลังโหลด…</div>
+
+<!-- ตั้งค่าการเชื่อมต่อ (แสดงเมื่อยังไม่ได้ใส่ค่า Supabase) -->
+<div class="auth-screen hidden" id="setup-screen">
+  <div class="auth-card">
+    <div class="brand"><div class="brand-mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg></div><div><h2>เชื่อมต่อ Supabase</h2><span class="sub">ทำครั้งเดียว</span></div></div>
+    <p class="sub">นำค่าจาก Supabase → Project Settings → API มาวาง (ใช้ <b>anon / publishable key</b> เท่านั้น ห้ามใช้ service_role)</p>
+    <form class="form" id="setup-form">
+      <label>Project URL<input name="url" placeholder="https://xxxx.supabase.co" required></label>
+      <label>anon public key<input name="key" placeholder="eyJhbGciOi... หรือ sb_publishable_..." required></label>
+      <div class="err" id="setup-err"></div>
+      <button class="btn primary" style="justify-content:center">บันทึกและเชื่อมต่อ</button>
+    </form>
+  </div>
+</div>
+
+<!-- ล็อกอิน -->
+<div class="auth-screen hidden" id="auth-screen">
+  <div class="auth-card">
+    <div class="brand"><div class="brand-mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg></div><div><h2>Aftersale Service</h2><span class="sub">บริการหลังการขาย</span></div></div>
+    <div class="tabs"><button class="on" data-mode="in">เข้าสู่ระบบ</button><button data-mode="up">สมัครใช้งาน</button></div>
+    <form class="form" id="auth-form">
+      <label class="hidden" id="name-field">ชื่อที่แสดง<input name="name" placeholder="เช่น สมชาย (ช่าง)"></label>
+      <label>อีเมล<input name="email" type="email" required autocomplete="email"></label>
+      <label>รหัสผ่าน<input name="password" type="password" required minlength="6" autocomplete="current-password"></label>
+      <div class="err" id="auth-err"></div>
+      <button class="btn primary" style="justify-content:center" id="auth-btn">เข้าสู่ระบบ</button>
+    </form>
+  </div>
+</div>
+
+<!-- รออนุมัติ -->
+<div class="auth-screen hidden" id="pending-screen">
+  <div class="auth-card" style="text-align:center">
+    <h2>รอ Admin อนุมัติ</h2>
+    <p class="sub" style="margin:10px 0 18px">บัญชี <b id="pending-email"></b> สมัครเรียบร้อยแล้ว<br>กรุณาแจ้ง Admin ให้กำหนดสิทธิ์ที่หน้า “ผู้ใช้และสิทธิ์” แล้วกดรีเฟรช</p>
+    <div class="actions" style="justify-content:center"><button class="btn" onclick="location.reload()">รีเฟรช</button><button class="btn" onclick="signOut()">ออกจากระบบ</button></div>
+  </div>
+</div>
+
+<main class="shell hidden" id="app">
+  <aside class="app-sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg></div>
+      <div><strong>Aftersale Service</strong><small>บริการหลังการขาย</small></div>
+    </div>
+    <nav id="nav"></nav>
+    <div class="sidebar-user">
+      ผู้ใช้งานปัจจุบัน
+      <div class="me-box"><div><span id="me-name"></span><small id="me-role"></small></div><button onclick="signOut()">ออกจากระบบ</button></div>
+    </div>
+    <div class="sidebar-footer">Aftersale Service</div>
+  </aside>
+  <div class="app-main">
+    <header class="top">
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="menu-btn" id="menu-btn" aria-label="เมนู"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+        <div class="top-label" id="top-label"></div>
+      </div>
+      <div class="header-right">
+        <span class="live off" id="live"><span></span><em style="font-style:normal" id="live-text">กำลังเชื่อมต่อ…</em></span>
+        <button class="btn primary" id="btn-new-case"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg> เปิดเคสใหม่</button>
+      </div>
+    </header>
+    <div class="content" id="view"></div>
+  </div>
+</main>
+
+<div class="overlay" id="overlay"></div>
+<div class="modal" id="modal"></div>
+<div class="drawer" id="drawer"></div>
+<div class="toast" id="toast"></div>
+<div id="print-area"></div>
+<input type="file" id="file-customers" accept=".csv,.xlsx,.xls" class="hidden">
+<input type="file" id="file-backup" accept=".json" class="hidden">
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script>
+/* =====================================================================
+   ตั้งค่า Supabase — ใส่ค่าตรงนี้แล้วทุกเครื่องจะเชื่อมต่ออัตโนมัติ
+   (Supabase → Project Settings → API) ใช้ anon/publishable key เท่านั้น
+   ===================================================================== */
+const SUPABASE_URL = 'https://iyfbmbdsgfhfimvhfrvn.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_e6CfQ34AgjD3ccQm9XpRzg_5rQQyk4i';
+
+/* ============ CONFIG ============ */
+const STATUSES = [
+  {key:'new', label:'ใหม่', cls:'b-blue'},
+  {key:'assigned', label:'มอบหมายแล้ว', cls:'b-violet'},
+  {key:'progress', label:'กำลังดำเนินการ', cls:'b-orange'},
+  {key:'verify', label:'รอตรวจสอบคุณภาพ', cls:'b-violet'},
+  {key:'rework', label:'Rework', cls:'b-red'},
+  {key:'confirm', label:'รอลูกค้ายืนยัน', cls:'b-blue'},
+  {key:'closed', label:'ปิดเคส', cls:'b-green'},
+  {key:'escalated', label:'Escalated', cls:'b-red'},
+];
+const PRIORITIES = [
+  {key:'critical', label:'Critical', cls:'b-red', days:1},
+  {key:'high', label:'High', cls:'b-orange', days:3},
+  {key:'normal', label:'Normal', cls:'b-blue', days:7},
+  {key:'low', label:'Low', cls:'b-green', days:14},
+];
+const CATEGORIES = ['โครงสร้าง','ไฟฟ้า','ประปา','สี/ผิวผนัง','หลังคา/รั่วซึม','ประตู/หน้าต่าง','พื้น/กระเบื้อง','อื่นๆ'];
+const ROLES = {
+  admin:   {label:'Admin',   perms:{create:1,edit:1,close:1,delete:1,users:1,import:1}},
+  manager: {label:'Manager', perms:{create:1,edit:1,close:1,delete:1,users:0,import:1}},
+  cs:      {label:'CS',      perms:{create:1,edit:1,close:0,delete:0,users:0,import:1}},
+  tech:    {label:'ช่าง',     perms:{create:0,edit:1,close:0,delete:0,users:0,import:0}},
+  pending: {label:'รออนุมัติ', perms:{}},
+};
+const PERM_LABELS = {create:'เปิดเคสใหม่',edit:'อัปเดตสถานะ / บันทึกงาน',close:'ปิดเคส / ออกใบส่งมอบ',delete:'ลบเคส / ลบลูกค้า',import:'เพิ่ม / อัปโหลด Customer Data',users:'จัดการผู้ใช้และสิทธิ์'};
+const MAX_REWORK = 3;
+const BUCKET = 'case-photos';
+
+/* ============ ICONS ============ */
+const I = {
+  overall:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>',
+  projects:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
+  dashboard:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>',
+  users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M16 4a4 4 0 0 1 0 8M22 21a7 7 0 0 0-4-6.3"/></svg>',
+  upload:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg>',
+  doc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>',
+  pin:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+};
+const PAGES = [
+  {key:'overall', label:'Overall', icon:I.overall},
+  {key:'projects', label:'โครงการ / บ้านลูกค้า', icon:I.projects},
+  {key:'dashboard', label:'Dashboard · ทุกเคส', icon:I.dashboard},
+  {key:'users', label:'ผู้ใช้และสิทธิ์', icon:I.users},
+];
+
+/* ============ HELPERS ============ */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Math.random().toString(36).slice(2,10);
+const localISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const todayISO = () => localISO(new Date());
+const addDays = (iso,n) => { const d=new Date(iso+'T00:00:00'); d.setDate(d.getDate()+n); return localISO(d); };
+const thDate = iso => iso ? new Date(iso+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}) : '-';
+const thDateLong = iso => new Date((iso||todayISO())+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'long',year:'numeric'});
+const thDateTime = ts => new Date(ts).toLocaleString('th-TH',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+const st = k => STATUSES.find(s=>s.key===k) || STATUSES[0];
+const pr = k => PRIORITIES.find(p=>p.key===k) || PRIORITIES[2];
+const badge = o => `<span class="badge ${o.cls}">${esc(o.label)}</span>`;
+const isOpen = c => c.status !== 'closed';
+const isOverdue = c => isOpen(c) && c.dueAt && c.dueAt < todayISO();
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>t.style.display='none',2800); }
+function show(id){ ['#loading','#setup-screen','#auth-screen','#pending-screen','#app'].forEach(s=>$(s).classList.toggle('hidden', s!==id)); }
+
+/* ============ SUPABASE ============ */
+let sb = null;
+let DB = {customers:[], cases:[], logs:{}, users:[]};
+let ME = null;           // profile ของผู้ใช้ที่ล็อกอิน
+let view = {page:'projects', customerId:null};
+let filters = {q:'', status:'', priority:'', category:'', overdue:''};
+let openCaseId = null;
+
+function getConfig(){
+  if(SUPABASE_URL && SUPABASE_ANON_KEY) return {url:SUPABASE_URL, key:SUPABASE_ANON_KEY};
+  try{ return JSON.parse(localStorage.getItem('afs-supabase')||'null'); }catch(e){ return null; }
+}
+async function q(promise, what='ทำรายการ'){
+  const {data, error} = await promise;
+  if(error){ console.error(error); alert(`${what}ไม่สำเร็จ: ${error.message}`); throw error; }
+  return data;
+}
+const fromCust = r => ({id:r.id, name:r.name, project:r.project||'', house:r.house||'', address:r.address||'', phone:r.phone||'', handoverDate:r.handover_date||''});
+const toCust = c => ({name:c.name, project:c.project||'', house:c.house||'', address:c.address||'', phone:c.phone||'', handover_date:c.handoverDate||null});
+const fromCase = r => ({id:r.id, code:r.code, customerId:r.customer_id, title:r.title||'', detail:r.detail||'', location:r.location||'', category:r.category||'อื่นๆ', priority:r.priority, status:r.status, assignee:r.assignee||'', openedAt:r.opened_at, dueAt:r.due_at||'', closedAt:r.closed_at||'', rework:r.rework||0, photos:r.photos||[]});
+
+async function loadAll(){
+  const [cu, ca, lg, us] = await Promise.all([
+    sb.from('customers').select('*').order('created_at'),
+    sb.from('cases').select('*').order('created_at'),
+    sb.from('case_logs').select('*').order('ts'),
+    sb.from('profiles').select('*').order('created_at'),
+  ]);
+  for(const r of [cu,ca,lg,us]) if(r.error){ console.error(r.error); toast('โหลดข้อมูลไม่สำเร็จ: '+r.error.message); return; }
+  DB.customers = cu.data.map(fromCust);
+  DB.cases = ca.data.map(fromCase);
+  DB.users = us.data;
+  DB.logs = {}; lg.data.forEach(l=>(DB.logs[l.case_id] ||= []).push({ts:l.ts, by:l.by_name, text:l.text}));
+  ME = DB.users.find(u=>u.id===ME.id) || ME;
+  if(ME.role==='pending'){ $('#pending-email').textContent=ME.email||''; show('#pending-screen'); return; }
+  render();
+  if(openCaseId && $('#drawer').classList.contains('open') && !document.activeElement?.closest('#drawer')) openCase(openCaseId, true);
+}
+let reloadTimer;
+function scheduleReload(){ clearTimeout(reloadTimer); reloadTimer=setTimeout(loadAll, 250); }
+function subscribe(){
+  const live = $('#live'), txt = $('#live-text');
+  sb.channel('afs-all')
+    .on('postgres_changes', {event:'*', schema:'public', table:'cases'}, scheduleReload)
+    .on('postgres_changes', {event:'*', schema:'public', table:'customers'}, scheduleReload)
+    .on('postgres_changes', {event:'*', schema:'public', table:'case_logs'}, scheduleReload)
+    .on('postgres_changes', {event:'*', schema:'public', table:'profiles'}, scheduleReload)
+    .subscribe(status=>{
+      const ok = status==='SUBSCRIBED';
+      live.classList.toggle('off', !ok);
+      txt.textContent = ok ? 'เรียลไทม์ · ข้อมูลล่าสุด' : 'ออฟไลน์ · กำลังเชื่อมต่อใหม่';
+      if(ok) scheduleReload();
+    });
+}
+
+const me = () => ME || {};
+const can = p => !!ROLES[me().role]?.perms[p];
+const customer = id => DB.customers.find(c=>c.id===id) || {id:'', name:'(ไม่พบลูกค้า)'};
+const logsOf = id => DB.logs[id] || [];
+async function addLog(caseId, text){ await q(sb.from('case_logs').insert({case_id:caseId, by_name:me().name||me().email, text}), 'บันทึกประวัติ'); }
+
+/* ============ NAV ============ */
+function renderNav(){
+  $('#nav').innerHTML = PAGES.map(p=>`<button class="${view.page===p.key?'active':''}" data-page="${p.key}">${p.icon}<span>${p.label}</span></button>`).join('');
+  $('#nav').querySelectorAll('button').forEach(b=>b.onclick=()=>{ go(b.dataset.page); $('#sidebar').classList.remove('open'); });
+  $('#me-name').textContent = me().name || me().email || '';
+  $('#me-role').textContent = ROLES[me().role]?.label || '';
+  $('#btn-new-case').disabled = !can('create');
+}
+function go(page, extra={}){ view={page, customerId:null, ...extra}; render(); window.scrollTo(0,0); }
+function render(){
+  show('#app');
+  if(view.customerId && !DB.customers.some(c=>c.id===view.customerId)) view.customerId=null;
+  renderNav();
+  const p = PAGES.find(x=>x.key===view.page);
+  $('#top-label').textContent = view.customerId ? customer(view.customerId).name : p.label;
+  // ไม่วาดหน้าใหม่ทับขณะผู้ใช้กำลังพิมพ์ในช่องค้นหา (กันเคอร์เซอร์หลุดตอนข้อมูลเรียลไทม์เข้า)
+  const focused = document.activeElement;
+  const keep = focused && focused.id && $('#view').contains(focused) ? {id:focused.id, pos:focused.selectionStart} : null;
+  ({overall:renderOverall, projects: view.customerId?renderProject:renderProjects, dashboard:renderDashboard, users:renderUsers})[view.page]();
+  if(keep){ const el=document.getElementById(keep.id); if(el){ el.focus(); try{ el.setSelectionRange(keep.pos,keep.pos); }catch(e){} } }
+}
+function head(eyebrow, title, desc){
+  return `<div class="page-head"><div><div class="eyebrow">${I.pin} ${eyebrow}</div><h1>${esc(title)}</h1><p>${desc}</p></div><div class="today">ข้อมูล ณ ${thDateLong()}</div></div>`;
+}
+
+/* ============ OVERALL ============ */
+function renderOverall(){
+  const cs = DB.cases, open = cs.filter(isOpen), closed = cs.filter(c=>!isOpen(c)), over = cs.filter(isOverdue);
+  const onTime = closed.filter(c=>c.closedAt && c.dueAt && c.closedAt<=c.dueAt).length;
+  const sla = closed.length ? Math.round(onTime/closed.length*100) : null;
+  const reworkRate = cs.length ? Math.round(cs.filter(c=>c.rework>0).length/cs.length*100) : 0;
+  const colorOf = cls => ({'b-red':'var(--red)','b-orange':'var(--orange)','b-blue':'var(--blue)','b-green':'var(--green)','b-violet':'var(--violet)'}[cls]);
+  const bars = items => { const max=Math.max(1,...items.map(i=>i.n)); return `<div class="bars">${items.map(i=>`<div class="bar-row"><span>${esc(i.label)}</span><div class="bar-track"><div class="bar-fill" style="width:${i.n/max*100}%;background:${i.color||'var(--primary)'}"></div></div><b>${i.n}</b></div>`).join('')}</div>`; };
+  const byStatus = STATUSES.map(s=>({label:s.label, n:cs.filter(c=>c.status===s.key).length, color:colorOf(s.cls)}));
+  const byCat = CATEGORIES.map(k=>({label:k, n:cs.filter(c=>c.category===k).length})).filter(x=>x.n).sort((a,b)=>b.n-a.n);
+  const urgent = open.slice().sort((a,b)=>(isOverdue(b)-isOverdue(a)) || (a.dueAt||'').localeCompare(b.dueAt||'')).slice(0,8);
+  $('#view').innerHTML = head('ภาพรวม','Overall','สรุปสถานะเคสบริการหลังการขายทั้งหมด') + `
+  <div class="kpis">
+    <div class="kpi blue"><small>เคสทั้งหมด</small><b>${cs.length}</b><i>${DB.customers.length} โครงการ / บ้าน</i></div>
+    <div class="kpi"><small>กำลังติดตาม</small><b>${open.length}</b><i>ยังไม่ปิดเคส</i></div>
+    <div class="kpi red"><small>เกินกำหนด SLA</small><b>${over.length}</b><i>ต้องเร่งดำเนินการ</i></div>
+    <div class="kpi green"><small>ปิดแล้ว</small><b>${closed.length}</b><i>SLA ทันเวลา ${sla===null?'-':sla+'%'}</i></div>
+    <div class="kpi"><small>Rework Rate</small><b>${reworkRate}%</b><i>เคสที่มีการแก้ซ้ำ</i></div>
+  </div>
+  <div class="grid-2">
+    <div class="panel"><h3>เคสตามสถานะ</h3><p class="sub">จำนวนเคสในแต่ละขั้นตอน</p>${bars(byStatus)}</div>
+    <div class="panel"><h3>เคสตามประเภทปัญหา</h3><p class="sub">หมวดที่ถูกแจ้งบ่อย</p>${byCat.length?bars(byCat):'<div class="empty">ยังไม่มีข้อมูล</div>'}</div>
+  </div>
+  <div class="panel"><div class="records-head" style="margin-bottom:10px"><div><h3>เคสที่ต้องติดตามด่วน</h3><p class="sub">เรียงตามกำหนดแก้ไข เคสเกินกำหนดขึ้นก่อน</p></div><button class="btn sm" onclick="go('dashboard')">ดูทุกเคส →</button></div>
+  ${caseTable(urgent)}</div>`;
+  bindRows();
+}
+
+/* ============ PROJECTS ============ */
+let projQ = '';
+function renderProjects(){
+  const list = DB.customers.map(c=>{ const cs=DB.cases.filter(x=>x.customerId===c.id); return {c, total:cs.length, closed:cs.filter(x=>!isOpen(x)).length, open:cs.filter(isOpen).length, over:cs.filter(isOverdue).length}; })
+    .sort((a,b)=>b.total-a.total || b.over-a.over || a.c.name.localeCompare(b.c.name,'th'));
+  $('#view').innerHTML = head('ติดตามตามโครงการ','โครงการ / บ้านลูกค้า','เลือกบ้านเพื่อดูเคสทั้งหมดของโครงการ') + `
+  <section class="project-section">
+    <div class="records-head"><div><h2>โครงการ / บ้าน</h2><p>เลือกโครงการเพื่อดูเคสและออกใบส่งมอบงาน</p></div>
+      <div class="customer-actions">
+        <span class="count">${list.length} โครงการ</span>
+        <input id="proj-q" placeholder="ค้นหาชื่อลูกค้า / โครงการ" value="${esc(projQ)}" style="height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px">
+        <button class="btn" onclick="openCustomerForm()" ${can('import')?'':'disabled'}>+ เพิ่มลูกค้า</button>
+        <button class="btn" id="btn-upload" ${can('import')?'':'disabled'}>${I.upload} อัปโหลด Customer Data</button>
+      </div>
+    </div>
+    <div class="project-grid" id="project-grid">
+      ${list.map(({c,total,closed,open,over})=>`
+      <button class="project-card" data-id="${c.id}" data-name="${esc((c.name+' '+c.project+' '+c.house).toLowerCase())}">
+        <div class="project-top"><span>${esc([c.project,c.house].filter(Boolean).join(' · '))}</span><span>ดูเคส →</span></div>
+        <h3>${esc(c.name)}</h3>
+        <p>${total} เคสทั้งหมด · ${closed} ปิดแล้ว</p>
+        <footer><span>${open} เคสกำลังติดตาม</span>${over?`<strong>${over} เกินกำหนด</strong>`:''}</footer>
+      </button>`).join('') || '<div class="empty">ยังไม่มีลูกค้า กด “อัปโหลด Customer Data” หรือ “+ เพิ่มลูกค้า”</div>'}
+    </div>
+  </section>`;
+  document.querySelectorAll('.project-card').forEach(b=>b.onclick=()=>go('projects',{customerId:b.dataset.id}));
+  $('#btn-upload').onclick=()=>$('#file-customers').click();
+  const filt=()=>{ const q=projQ.toLowerCase().trim(); document.querySelectorAll('.project-card').forEach(card=>card.classList.toggle('hidden', !!q && !card.dataset.name.includes(q))); };
+  $('#proj-q').oninput=e=>{ projQ=e.target.value; filt(); }; filt();
+}
+function renderProject(){
+  const c = customer(view.customerId);
+  const cs = DB.cases.filter(x=>x.customerId===c.id);
+  $('#view').innerHTML = `<button class="back" onclick="go('projects')">← กลับไปหน้าโครงการ</button>` + head('โครงการ / บ้านลูกค้า', c.name, `${cs.length} เคสทั้งหมด · ${cs.filter(x=>!isOpen(x)).length} ปิดแล้ว · ${cs.filter(isOverdue).length} เกินกำหนด`) + `
+  <div class="panel" style="margin-bottom:14px">
+    <div class="records-head" style="margin-bottom:0"><div><h3>ข้อมูลลูกค้า</h3></div>
+      <div class="customer-actions">
+        <button class="btn sm" onclick="openCustomerForm('${c.id}')" ${can('import')?'':'disabled'}>แก้ไขข้อมูล</button>
+        <button class="btn sm" onclick="openNewCase('${c.id}')" ${can('create')?'':'disabled'}>+ เปิดเคสให้บ้านนี้</button>
+        <button class="btn sm primary" onclick="openHandover('${c.id}')" ${can('close')?'':'disabled'}>${I.doc} ออกใบส่งมอบงาน</button>
+      </div>
+    </div>
+    <div class="info-grid">
+      <div><small>โครงการ</small>${esc(c.project||'-')}</div>
+      <div><small>บ้านเลขที่ / แปลง</small>${esc(c.house||'-')}</div>
+      <div><small>โทรศัพท์</small>${esc(c.phone||'-')}</div>
+      <div><small>วันส่งมอบบ้าน</small>${thDate(c.handoverDate)} ${warrantyBadge(c)}</div>
+      <div style="grid-column:1/-1"><small>ที่อยู่</small>${esc(c.address||'-')}</div>
+    </div>
+  </div>
+  <div class="records-head"><div><h2>เคสของบ้านนี้</h2></div></div>
+  ${caseTable(cs, true)}`;
+  bindRows();
+}
+function warrantyBadge(c){
+  if(!c.handoverDate) return '';
+  const end = addDays(c.handoverDate, 365);
+  return end >= todayISO() ? `<span class="badge b-green">ในประกัน ถึง ${thDate(end)}</span>` : `<span class="badge b-gray">หมดประกัน</span>`;
+}
+
+/* ============ CASE TABLE ============ */
+function caseTable(list, hideCustomer){
+  if(!list.length) return `<div class="table-wrap"><div class="empty">ไม่มีเคส</div></div>`;
+  return `<div class="table-wrap"><table><thead><tr><th>เลขเคส</th>${hideCustomer?'':'<th>ลูกค้า / โครงการ</th>'}<th>เรื่องที่แจ้ง</th><th>ประเภท</th><th>Priority</th><th>สถานะ</th><th>ผู้รับผิดชอบ</th><th>เปิดเคส</th><th>กำหนดแก้ไข</th></tr></thead><tbody>
+  ${list.map(c=>`<tr data-case="${c.id}">
+    <td class="mono">${esc(c.code)}</td>
+    ${hideCustomer?'':`<td>${esc(customer(c.customerId).name)}</td>`}
+    <td>${esc(c.title)}${c.rework?` <span class="badge b-red">Rework ×${c.rework}</span>`:''}</td>
+    <td>${esc(c.category)}</td><td>${badge(pr(c.priority))}</td><td>${badge(st(c.status))}</td>
+    <td>${esc(c.assignee||'-')}</td><td style="white-space:nowrap">${thDate(c.openedAt)}</td>
+    <td class="${isOverdue(c)?'overdue':''}" style="min-width:110px">${c.status==='closed'?'ปิด '+thDate(c.closedAt):thDate(c.dueAt)+(isOverdue(c)?' · เกินกำหนด':'')}</td>
+  </tr>`).join('')}</tbody></table></div>`;
+}
+function bindRows(){ document.querySelectorAll('tr[data-case]').forEach(r=>r.onclick=()=>openCase(r.dataset.case)); }
+
+/* ============ DASHBOARD ============ */
+function renderDashboard(){
+  const f = filters;
+  $('#view').innerHTML = head('ทุกเคส','Dashboard · ทุกเคส','ค้นหา กรอง และอัปเดตสถานะเคสทั้งหมด') + `
+  <div class="kpis">${STATUSES.map(s=>`<div class="kpi" style="cursor:pointer" onclick="filters.status='${s.key}';renderDashboard()"><small>${s.label}</small><b>${DB.cases.filter(c=>c.status===s.key).length}</b></div>`).join('')}</div>
+  <div class="toolbar">
+    <input id="f-q" placeholder="ค้นหาเลขเคส ลูกค้า เรื่องที่แจ้ง ผู้รับผิดชอบ" value="${esc(f.q)}">
+    <select id="f-status"><option value="">ทุกสถานะ</option>${STATUSES.map(s=>`<option value="${s.key}" ${f.status===s.key?'selected':''}>${s.label}</option>`).join('')}</select>
+    <select id="f-priority"><option value="">ทุก Priority</option>${PRIORITIES.map(s=>`<option value="${s.key}" ${f.priority===s.key?'selected':''}>${s.label}</option>`).join('')}</select>
+    <select id="f-category"><option value="">ทุกประเภท</option>${CATEGORIES.map(s=>`<option ${f.category===s?'selected':''}>${s}</option>`).join('')}</select>
+    <select id="f-overdue"><option value="">ทั้งหมด</option><option value="open" ${f.overdue==='open'?'selected':''}>เฉพาะที่ยังเปิด</option><option value="over" ${f.overdue==='over'?'selected':''}>เฉพาะเกินกำหนด</option></select>
+    <button class="btn" onclick="exportCSV()">ส่งออก CSV</button>
+  </div>
+  <div id="case-list"></div>`;
+  const apply = () => {
+    const q=f.q.toLowerCase();
+    const list = DB.cases.filter(c=>
+      (!f.status||c.status===f.status)&&(!f.priority||c.priority===f.priority)&&(!f.category||c.category===f.category)&&
+      (!f.overdue||(f.overdue==='open'?isOpen(c):isOverdue(c)))&&
+      (!q||[c.code,c.title,c.detail,c.assignee,customer(c.customerId).name].join(' ').toLowerCase().includes(q))
+    ).sort((a,b)=>(b.openedAt||'').localeCompare(a.openedAt||'')||b.code.localeCompare(a.code));
+    $('#case-list').innerHTML = `<p class="sub" style="margin:0 0 8px">${list.length} เคส</p>` + caseTable(list); bindRows();
+  };
+  ['q','status','priority','category','overdue'].forEach(k=>$('#f-'+k)[k==='q'?'oninput':'onchange']=e=>{f[k]=e.target.value;apply();});
+  apply();
+}
+function exportCSV(){
+  const rows=[['เลขเคส','ลูกค้า','เรื่อง','รายละเอียด','ตำแหน่ง','ประเภท','Priority','สถานะ','ผู้รับผิดชอบ','เปิดเคส','กำหนดแก้ไข','ปิดเคส','Rework']];
+  DB.cases.forEach(c=>rows.push([c.code,customer(c.customerId).name,c.title,c.detail,c.location,c.category,pr(c.priority).label,st(c.status).label,c.assignee,c.openedAt,c.dueAt,c.closedAt,c.rework]));
+  download('afs-cases-'+todayISO()+'.csv', '﻿'+rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n'), 'text/csv');
+}
+function download(name, data, type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type})); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
+
+/* ============ USERS ============ */
+function renderUsers(){
+  const admin = can('users');
+  const pending = DB.users.filter(u=>u.role==='pending').length;
+  const roleOpts = u => Object.entries(ROLES).map(([k,r])=>`<option value="${k}" ${u.role===k?'selected':''}>${r.label}</option>`).join('');
+  const hasLocal = (()=>{ try{ return !!localStorage.getItem('afs-data-v1'); }catch(e){ return false; } })();
+  $('#view').innerHTML = head('ผู้ใช้และสิทธิ์','ผู้ใช้และสิทธิ์','กำหนดผู้ใช้งาน บทบาท และสิทธิ์การเข้าถึง') + `
+  ${admin&&pending?`<div class="notice">มีผู้ใช้ใหม่ ${pending} คนรออนุมัติ — เลือกบทบาทให้ในตารางด้านล่าง</div>`:''}
+  <div class="grid-2">
+    <div class="panel">
+      <div class="records-head"><div><h3>ผู้ใช้งาน</h3><p class="sub">${DB.users.length} คน · คนใหม่ให้กด “สมัครใช้งาน” ที่หน้าเข้าสู่ระบบ แล้ว Admin อนุมัติที่นี่</p></div><button class="btn sm" onclick="copyLink()">คัดลอกลิงก์แอป</button></div>
+      <div class="table-wrap"><table><thead><tr><th>ชื่อ</th><th>อีเมล</th><th>บทบาท</th><th></th></tr></thead><tbody>
+      ${DB.users.map(u=>`<tr style="cursor:default"><td>${esc(u.name)}${u.id===me().id?' <span class="badge b-blue">คุณ</span>':''}</td><td>${esc(u.email||'-')}</td>
+      <td>${admin&&u.id!==me().id?`<select class="role-sel" data-uid="${u.id}">${roleOpts(u)}</select>`:(u.role==='pending'?'<span class="badge b-orange">รออนุมัติ</span>':ROLES[u.role].label)}</td>
+      <td style="text-align:right;white-space:nowrap">${admin||u.id===me().id?`<button class="btn sm" onclick="renameUser('${u.id}')">แก้ชื่อ</button>`:''} ${admin&&u.id!==me().id?`<button class="btn sm danger" onclick="delUser('${u.id}')">ลบ</button>`:''}</td></tr>`).join('')}
+      </tbody></table></div>
+    </div>
+    <div class="panel">
+      <h3>สิทธิ์ตามบทบาท</h3><p class="sub">ระบบบังคับสิทธิ์ที่ฐานข้อมูลจริง</p>
+      <div class="perm" style="margin-top:12px">
+        <div class="h">การใช้งาน</div>${['admin','manager','cs','tech'].map(k=>`<div class="h c">${ROLES[k].label}</div>`).join('')}
+        ${Object.entries(PERM_LABELS).map(([k,l])=>`<div>${l}</div>${['admin','manager','cs','tech'].map(r=>`<div class="c">${ROLES[r].perms[k]?'✅':'—'}</div>`).join('')}`).join('')}
+      </div>
+    </div>
+  </div>
+  <div class="panel">
+    <h3>ข้อมูลและการสำรอง</h3>
+    <p class="sub">ข้อมูลอยู่บน Supabase และซิงก์ทุกเครื่องแบบเรียลไทม์ ปุ่มด้านล่างใช้สำรองไฟล์เพิ่มเติม หรือย้ายข้อมูลจากเวอร์ชันเก่า (ที่เก็บในเบราว์เซอร์)</p>
+    <div class="actions" style="justify-content:flex-start">
+      <button class="btn primary" onclick="backup()">สำรองข้อมูล (.json)</button>
+      <button class="btn" onclick="$('#file-backup').click()" ${admin?'':'disabled'}>นำเข้าไฟล์สำรอง (.json)</button>
+      ${hasLocal&&admin?`<button class="btn" onclick="migrateLocal()">ย้ายข้อมูลจากเบราว์เซอร์เครื่องนี้ขึ้น Supabase</button>`:''}
+    </div>
+  </div>`;
+  document.querySelectorAll('.role-sel').forEach(s=>s.onchange=async()=>{
+    await q(sb.from('profiles').update({role:s.value}).eq('id',s.dataset.uid), 'เปลี่ยนสิทธิ์'); toast('อัปเดตสิทธิ์แล้ว'); scheduleReload();
+  });
+}
+function copyLink(){ navigator.clipboard?.writeText(location.href.split('#')[0]).then(()=>toast('คัดลอกลิงก์แล้ว ส่งให้ทีมสมัครได้เลย')); }
+async function renameUser(id){
+  const u=DB.users.find(x=>x.id===id); const name=prompt('ชื่อที่แสดง', u.name); if(!name) return;
+  await q(sb.from('profiles').update({name}).eq('id',id), 'แก้ชื่อ'); scheduleReload();
+}
+async function delUser(id){
+  if(!confirm('ลบผู้ใช้นี้ออกจากแอป? (ผู้ใช้จะเข้าใช้งานไม่ได้ ถ้าต้องการลบบัญชีถาวรให้ลบที่ Supabase → Authentication ด้วย)')) return;
+  await q(sb.from('profiles').update({role:'pending'}).eq('id',id), 'ลบผู้ใช้');
+  await q(sb.from('profiles').delete().eq('id',id), 'ลบผู้ใช้'); scheduleReload();
+}
+function backup(){ download('afs-backup-'+todayISO()+'.json', JSON.stringify({exportedAt:new Date().toISOString(), customers:DB.customers, cases:DB.cases.map(c=>({...c, log:logsOf(c.id)}))},null,1), 'application/json'); }
+
+// นำเข้าข้อมูลรูปแบบ {customers:[], cases:[]} (จากไฟล์สำรอง หรือเวอร์ชันเก่า)
+async function importData(d){
+  const custs = d.customers||[], cases = d.cases||[];
+  if(!confirm(`นำเข้า ${custs.length} ลูกค้า / ${cases.length} เคส ขึ้น Supabase? (เพิ่มต่อจากข้อมูลเดิม)`)) return;
+  toast('กำลังนำเข้า…');
+  const idMap = {};
+  for(const c of custs){
+    const exist = DB.customers.find(x=>x.name===c.name && (x.house||'')===(c.house||''));
+    if(exist){ idMap[c.id]=exist.id; continue; }
+    const row = await q(sb.from('customers').insert(toCust(c)).select().single(), 'นำเข้าลูกค้า');
+    idMap[c.id]=row.id;
+  }
+  let n=0;
+  for(const c of cases){
+    const cid = idMap[c.customerId]; if(!cid) continue;
+    const row = await q(sb.from('cases').insert({customer_id:cid, title:c.title, detail:c.detail, location:c.location, category:c.category, priority:c.priority||'normal',
+      status:c.status==='closed' && !can('close') ? 'confirm' : (c.status||'new'), assignee:c.assignee, opened_at:c.openedAt||todayISO(), due_at:c.dueAt||null, closed_at:c.closedAt||null, rework:c.rework||0}).select().single(), 'นำเข้าเคส');
+    const logs = (c.log||[]).filter(l=>l.text).map(l=>({case_id:row.id, ts:new Date(l.ts).toISOString(), by_name:l.by||'', text:l.text}));
+    if(logs.length) await q(sb.from('case_logs').insert(logs), 'นำเข้าประวัติ');
+    n++;
+  }
+  toast(`นำเข้าแล้ว ${n} เคส`); scheduleReload();
+}
+async function migrateLocal(){
+  try{ const d=JSON.parse(localStorage.getItem('afs-data-v1')); await importData(d); }catch(e){ if(e?.message) alert('ย้ายข้อมูลไม่สำเร็จ: '+e.message); }
+}
+$('#file-backup').onchange = async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  let d; try{ d=JSON.parse(await f.text()); if(!d.cases||!d.customers) throw 0; }catch(err){ return alert('ไฟล์ไม่ถูกต้อง'); }
+  await importData(d);
+};
+
+/* ============ MODAL HELPERS ============ */
+function modal(html){ $('#modal').innerHTML=html; $('#modal').classList.add('open'); $('#overlay').classList.add('open'); }
+function closeAll(){ ['#modal','#drawer','#overlay'].forEach(s=>$(s).classList.remove('open')); openCaseId=null; }
+$('#overlay').onclick=closeAll;
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeAll(); });
+function busy(btn, on){ if(!btn) return; btn.disabled=on; if(on){ btn.dataset.t=btn.textContent; btn.textContent='กำลังบันทึก…'; } else if(btn.dataset.t) btn.textContent=btn.dataset.t; }
+
+/* ============ CUSTOMER FORM / IMPORT ============ */
+function openCustomerForm(id){
+  const c = DB.customers.find(x=>x.id===id) || {name:'',project:'',house:'',address:'',phone:'',handoverDate:''};
+  modal(`<button class="x" onclick="closeAll()">×</button><h2>${id?'แก้ไขข้อมูลลูกค้า':'เพิ่มลูกค้า / บ้าน'}</h2>
+  <form class="form" id="cf">
+    <label class="full">ชื่อลูกค้า *<input name="name" required value="${esc(c.name)}"></label>
+    <label>โครงการ<input name="project" value="${esc(c.project)}"></label>
+    <label>บ้านเลขที่ / แปลง<input name="house" value="${esc(c.house)}"></label>
+    <label>โทรศัพท์<input name="phone" value="${esc(c.phone)}"></label>
+    <label>วันส่งมอบบ้าน<input type="date" name="handoverDate" value="${esc(c.handoverDate)}"></label>
+    <label class="full">ที่อยู่<textarea name="address">${esc(c.address)}</textarea></label>
+    <div class="actions full">${id&&can('delete')?`<button type="button" class="btn danger" style="margin-right:auto" onclick="delCustomer('${id}')">ลบลูกค้า</button>`:''}<button type="button" class="btn" onclick="closeAll()">ยกเลิก</button><button class="btn primary">บันทึก</button></div>
+  </form>`);
+  $('#cf').onsubmit=async e=>{ e.preventDefault(); const btn=e.submitter; busy(btn,true);
+    const d=Object.fromEntries(new FormData(e.target));
+    try{
+      if(id) await q(sb.from('customers').update(toCust(d)).eq('id',id), 'บันทึกลูกค้า');
+      else await q(sb.from('customers').insert(toCust(d)), 'เพิ่มลูกค้า');
+      closeAll(); toast('บันทึกข้อมูลลูกค้าแล้ว'); scheduleReload();
+    }finally{ busy(btn,false); } };
+}
+async function delCustomer(id){
+  const n=DB.cases.filter(c=>c.customerId===id).length;
+  if(!confirm(`ลบลูกค้านี้${n?` และเคส ${n} รายการ`:''}?`)) return;
+  await q(sb.from('customers').delete().eq('id',id), 'ลบลูกค้า'); closeAll(); go('projects'); scheduleReload();
+}
+const COLMAP = {name:['ชื่อลูกค้า','ชื่อ','ลูกค้า','name','customer','customer name'], project:['โครงการ','project'], house:['บ้านเลขที่','แปลง','บ้านเลขที่/แปลง','house','unit','plot'], address:['ที่อยู่','address'], phone:['โทรศัพท์','เบอร์โทร','โทร','phone','tel','mobile'], handoverDate:['วันส่งมอบ','วันส่งมอบบ้าน','handover','handover date','transfer date']};
+function normDate(v){
+  if(v==null||v==='') return '';
+  if(typeof v==='number'){ const d=new Date(Math.round((v-25569)*864e5)); return d.toISOString().slice(0,10); }
+  const s=String(v).trim(); let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m){ let y=+m[1]; if(y>2400) y-=543; return `${y}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`; }
+  m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
+  if(m){ let y=+m[3]; if(y<100) y+=2000; if(y>2400) y-=543; return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`; }
+  return '';
+}
+$('#file-customers').onchange = async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  let rows=[];
+  try{
+    if(/\.csv$/i.test(f.name) && !window.XLSX){ const txt=await f.text(); const lines=txt.replace(/^﻿/,'').split(/\r?\n/).filter(Boolean).map(l=>l.split(',').map(x=>x.replace(/^"|"$/g,'').trim())); const h=lines.shift(); rows=lines.map(l=>Object.fromEntries(h.map((k,i)=>[k,l[i]]))); }
+    else { if(!window.XLSX) throw new Error('โหลดตัวอ่าน Excel ไม่สำเร็จ (ต้องต่ออินเทอร์เน็ต)'); const wb=XLSX.read(await f.arrayBuffer(),{cellDates:false}); rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''}); }
+  }catch(err){ return alert('อ่านไฟล์ไม่สำเร็จ: '+(err.message||err)); }
+  if(!rows.length) return alert('ไม่พบข้อมูลในไฟล์');
+  const headers = Object.keys(rows[0]); const pick={};
+  for(const [field,alts] of Object.entries(COLMAP)) pick[field]=headers.find(h=>alts.includes(String(h).trim().toLowerCase())) || headers.find(h=>alts.some(a=>String(h).toLowerCase().includes(a)));
+  if(!pick.name) return alert('ไม่พบคอลัมน์ชื่อลูกค้า กรุณาตั้งหัวคอลัมน์เป็น “ชื่อลูกค้า”\nหัวคอลัมน์ที่รองรับ: ชื่อลูกค้า, โครงการ, บ้านเลขที่, ที่อยู่, โทรศัพท์, วันส่งมอบ');
+  const parsed = rows.map(r=>({name:String(r[pick.name]||'').trim(), project:pick.project?String(r[pick.project]).trim():'', house:pick.house?String(r[pick.house]).trim():'', address:pick.address?String(r[pick.address]).trim():'', phone:pick.phone?String(r[pick.phone]).trim():'', handoverDate:pick.handoverDate?normDate(r[pick.handoverDate]):''})).filter(r=>r.name);
+  const key = r=>(r.name+'|'+(r.house||'')).toLowerCase();
+  const existing = new Map(DB.customers.map(c=>[key(c),c]));
+  const upd = parsed.filter(r=>existing.has(key(r))).length;
+  modal(`<button class="x" onclick="closeAll()">×</button><h2>อัปโหลด Customer Data</h2><p class="sub">${esc(f.name)} · พบ ${parsed.length} รายการ (ใหม่ ${parsed.length-upd} · อัปเดต ${upd})</p>
+  <div class="table-wrap" style="max-height:320px;overflow:auto;margin-top:12px"><table><thead><tr><th>ชื่อลูกค้า</th><th>โครงการ</th><th>บ้านเลขที่</th><th>โทร</th><th>วันส่งมอบ</th></tr></thead><tbody>
+  ${parsed.slice(0,200).map(r=>`<tr style="cursor:default"><td>${esc(r.name)}</td><td>${esc(r.project)}</td><td>${esc(r.house)}</td><td>${esc(r.phone)}</td><td>${thDate(r.handoverDate)}</td></tr>`).join('')}</tbody></table></div>
+  <div class="actions"><button class="btn" onclick="closeAll()">ยกเลิก</button><button class="btn primary" id="do-import">นำเข้า</button></div>`);
+  $('#do-import').onclick=async()=>{
+    busy($('#do-import'),true);
+    const inserts=[];
+    for(const r of parsed){
+      const ex=existing.get(key(r));
+      if(ex){ const merged={...ex}; for(const k in r) if(r[k]) merged[k]=r[k]; await q(sb.from('customers').update(toCust(merged)).eq('id',ex.id), 'อัปเดตลูกค้า'); }
+      else inserts.push(toCust(r));
+    }
+    if(inserts.length) await q(sb.from('customers').insert(inserts), 'นำเข้าลูกค้า');
+    closeAll(); go('projects'); toast(`นำเข้าข้อมูลลูกค้า ${parsed.length} รายการแล้ว`); scheduleReload();
+  };
+};
+
+/* ============ PHOTOS ============ */
+function compress(file){
+  return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>{ const img=new Image(); img.onload=()=>{
+    const s=Math.min(1,1280/Math.max(img.width,img.height)); const cv=document.createElement('canvas'); cv.width=img.width*s; cv.height=img.height*s;
+    cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height); cv.toBlob(b=>b?res(b):rej(new Error('แปลงรูปไม่สำเร็จ')),'image/jpeg',.72); }; img.onerror=rej; img.src=r.result; }; r.onerror=rej; r.readAsDataURL(file); });
+}
+async function uploadPhotos(caseId, files, tag){
+  const out=[];
+  for(const f of files){ if(!f.size) continue;
+    const blob = await compress(f); const path = `${caseId}/${Date.now()}-${uid()}.jpg`;
+    await q(sb.storage.from(BUCKET).upload(path, blob, {contentType:'image/jpeg'}), 'อัปโหลดรูป');
+    out.push({id:uid(), path, tag, ts:Date.now()});
+  }
+  return out;
+}
+
+/* ============ NEW CASE ============ */
+function openNewCase(customerId){
+  if(!can('create')) return toast('บทบาทนี้ไม่มีสิทธิ์เปิดเคส');
+  if(!DB.customers.length) return toast('กรุณาเพิ่มลูกค้าก่อน');
+  modal(`<button class="x" onclick="closeAll()">×</button><h2>เปิดเคสใหม่</h2><p class="sub">แจ้งปัญหาบริการหลังการขาย</p>
+  <form class="form" id="nf">
+    <label class="full">ลูกค้า / โครงการ *<select name="customerId" required>${DB.customers.slice().sort((a,b)=>a.name.localeCompare(b.name,'th')).map(c=>`<option value="${c.id}" ${c.id===customerId?'selected':''}>${esc(c.name)}${c.house?' · '+esc(c.house):''}</option>`).join('')}</select></label>
+    <label class="full">เรื่องที่แจ้ง *<input name="title" required placeholder="เช่น น้ำรั่วซึมใต้ซิงค์ครัว"></label>
+    <label>ประเภทปัญหา<select name="category">${CATEGORIES.map(c=>`<option>${c}</option>`).join('')}</select></label>
+    <label>Priority<select name="priority">${PRIORITIES.map(p=>`<option value="${p.key}" ${p.key==='normal'?'selected':''}>${p.label} (แก้ภายใน ${p.days} วัน)</option>`).join('')}</select></label>
+    <label>ตำแหน่งในบ้าน<input name="location" placeholder="เช่น ห้องครัว ชั้น 1"></label>
+    <label>ผู้รับผิดชอบ<input name="assignee" list="assignees"><datalist id="assignees">${DB.users.filter(u=>u.role!=='pending').map(u=>`<option value="${esc(u.name)}">`).join('')}</datalist></label>
+    <label>วันที่เปิดเคส<input type="date" name="openedAt" value="${todayISO()}"></label>
+    <label>กำหนดแก้ไข (เว้นว่าง = ตาม SLA)<input type="date" name="dueAt"></label>
+    <label class="full">รายละเอียด<textarea name="detail"></textarea></label>
+    <label class="full">แนบภาพ Before (ไม่บังคับ)<input type="file" name="photos" accept="image/*" multiple></label>
+    <div class="actions full"><button type="button" class="btn" onclick="closeAll()">ยกเลิก</button><button class="btn primary">เปิดเคส</button></div>
+  </form>`);
+  $('#nf').onsubmit=async e=>{
+    e.preventDefault(); const btn=e.submitter; busy(btn,true);
+    const fd=new FormData(e.target); const d=Object.fromEntries(fd);
+    try{
+      const opened = d.openedAt || todayISO();
+      const row = await q(sb.from('cases').insert({customer_id:d.customerId, title:d.title, detail:d.detail, location:d.location, category:d.category, priority:d.priority,
+        status:d.assignee?'assigned':'new', assignee:d.assignee, opened_at:opened, due_at:d.dueAt || addDays(opened, pr(d.priority).days)}).select().single(), 'เปิดเคส');
+      await addLog(row.id, 'เปิดเคส'+(d.assignee?` · มอบหมายให้ ${d.assignee}`:''));
+      const files = fd.getAll('photos').filter(f=>f.size);
+      if(files.length){ const photos = await uploadPhotos(row.id, files, 'before'); await q(sb.from('cases').update({photos}).eq('id',row.id), 'บันทึกรูป'); }
+      closeAll(); toast('เปิดเคส '+row.code+' แล้ว'); scheduleReload();
+    }finally{ busy(btn,false); }
+  };
+}
+$('#btn-new-case').onclick=()=>openNewCase(view.customerId);
+
+/* ============ CASE DRAWER ============ */
+async function openCase(id, silent){
+  const c = DB.cases.find(x=>x.id===id); if(!c) return;
+  openCaseId = id;
+  const cu = customer(c.customerId);
+  const ed = can('edit');
+  const statusOpts = STATUSES.filter(s=>s.key!=='closed'||can('close')||c.status==='closed');
+  const scroll = $('#drawer').scrollTop;
+  $('#drawer').innerHTML = `<button class="x" onclick="closeAll()">×</button>
+  <div class="mono">${esc(c.code)}</div>
+  <h2 style="margin:2px 0 6px;font-size:19px">${esc(c.title)}</h2>
+  <div style="display:flex;gap:6px;flex-wrap:wrap">${badge(st(c.status))}${badge(pr(c.priority))}${isOverdue(c)?'<span class="badge b-red">เกินกำหนด</span>':''}${c.rework?`<span class="badge b-red">Rework ${c.rework}/${MAX_REWORK}</span>`:''}</div>
+  <div class="info-grid">
+    <div><small>ลูกค้า</small><a href="#" onclick="closeAll();go('projects',{customerId:'${cu.id}'});return false">${esc(cu.name)}</a></div>
+    <div><small>ตำแหน่งในบ้าน</small>${esc(c.location||'-')}</div>
+    <div><small>วันที่เปิดเคส</small>${thDate(c.openedAt)}</div>
+    <div><small>กำหนดแก้ไข</small><span class="${isOverdue(c)?'overdue':''}">${thDate(c.dueAt)}</span></div>
+    ${c.closedAt?`<div><small>วันที่ปิดเคส</small>${thDate(c.closedAt)}</div>`:''}
+  </div>
+  ${c.rework>MAX_REWORK?`<div class="notice" style="background:var(--red-soft);color:var(--red);margin-top:12px">Rework เกิน ${MAX_REWORK} รอบ ควรแจ้ง Manager</div>`:''}
+  <form class="form" id="ef">
+    <label>สถานะ<select name="status" ${ed?'':'disabled'}>${statusOpts.map(s=>`<option value="${s.key}" ${c.status===s.key?'selected':''}>${s.label}</option>`).join('')}</select></label>
+    <label>ผู้รับผิดชอบ<input name="assignee" value="${esc(c.assignee)}" ${ed?'':'disabled'} list="assignees2"><datalist id="assignees2">${DB.users.filter(u=>u.role!=='pending').map(u=>`<option value="${esc(u.name)}">`).join('')}</datalist></label>
+    <label>Priority<select name="priority" ${ed?'':'disabled'}>${PRIORITIES.map(p=>`<option value="${p.key}" ${c.priority===p.key?'selected':''}>${p.label}</option>`).join('')}</select></label>
+    <label>ประเภทปัญหา<select name="category" ${ed?'':'disabled'}>${CATEGORIES.map(x=>`<option ${c.category===x?'selected':''}>${x}</option>`).join('')}</select></label>
+    <label>กำหนดแก้ไข<input type="date" name="dueAt" value="${c.dueAt}" ${ed?'':'disabled'}></label>
+    <label>ตำแหน่งในบ้าน<input name="location" value="${esc(c.location)}" ${ed?'':'disabled'}></label>
+    <label class="full">เรื่องที่แจ้ง<input name="title" value="${esc(c.title)}" ${ed?'':'disabled'}></label>
+    <label class="full">รายละเอียด<textarea name="detail" ${ed?'':'disabled'}>${esc(c.detail)}</textarea></label>
+    <label class="full">บันทึกความคืบหน้า (ไม่บังคับ)<input name="note" placeholder="เช่น ช่างเข้าตรวจหน้างานแล้ว รออะไหล่" ${ed?'':'disabled'}></label>
+    <div class="actions full" style="margin-top:4px">
+      ${can('delete')?`<button type="button" class="btn danger" style="margin-right:auto" onclick="delCase('${c.id}')">ลบเคส</button>`:''}
+      ${ed&&c.status==='verify'?`<button type="button" class="btn" onclick="rework('${c.id}')">ส่ง Rework</button>`:''}
+      <button class="btn primary" ${ed?'':'disabled'}>บันทึก</button>
+    </div>
+  </form>
+  <div class="section-title">ภาพ Before / After</div>
+  <div class="photos" id="photos">${c.photos.length?c.photos.map(p=>`<figure><img data-path="${esc(p.path)}" alt=""><figcaption>${p.tag==='before'?'Before':'After'} · ${thDate(localISO(new Date(p.ts)))}</figcaption>${ed?`<button class="del" onclick="delPhoto('${c.id}','${p.id}')">ลบ</button>`:''}</figure>`).join(''):'<span class="sub">ยังไม่มีภาพ</span>'}</div>
+  ${ed?`<div style="display:flex;gap:8px;margin-top:8px"><label class="btn sm">+ ภาพ Before<input type="file" accept="image/*" multiple class="hidden" onchange="addPhotos('${c.id}','before',this)"></label><label class="btn sm">+ ภาพ After<input type="file" accept="image/*" multiple class="hidden" onchange="addPhotos('${c.id}','after',this)"></label></div>`:''}
+  <div class="section-title">ประวัติเคส</div>
+  <ul class="timeline">${logsOf(c.id).slice().reverse().map(l=>`<li>${esc(l.text)}<br><small>${esc(l.by)} · ${thDateTime(l.ts)}</small></li>`).join('') || '<li>-</li>'}</ul>`;
+  $('#drawer').classList.add('open'); $('#overlay').classList.add('open');
+  if(silent) $('#drawer').scrollTop = scroll;
+  // ขอ URL ชั่วคราวของรูป (bucket เป็น private)
+  if(c.photos.length){
+    const {data} = await sb.storage.from(BUCKET).createSignedUrls(c.photos.map(p=>p.path), 3600);
+    (data||[]).forEach(s=>{ const img=$(`#photos img[data-path="${CSS.escape(s.path)}"]`); if(img && s.signedUrl){ img.src=s.signedUrl; img.onclick=()=>window.open(s.signedUrl,'_blank'); } });
+  }
+  $('#ef').onsubmit=async e=>{
+    e.preventDefault(); const btn=e.submitter; busy(btn,true);
+    const d=Object.fromEntries(new FormData(e.target)); const changes=[];
+    const cur = DB.cases.find(x=>x.id===id);
+    if(d.status!==cur.status) changes.push(`สถานะ: ${st(cur.status).label} → ${st(d.status).label}`);
+    if(d.assignee!==cur.assignee) changes.push(`ผู้รับผิดชอบ: ${d.assignee||'-'}`);
+    if(d.priority!==cur.priority) changes.push(`Priority: ${pr(d.priority).label}`);
+    if(d.dueAt!==cur.dueAt) changes.push(`กำหนดแก้ไข: ${thDate(d.dueAt)}`);
+    const note=d.note.trim();
+    try{
+      const patch = {status:d.status, assignee:d.assignee, priority:d.priority, category:d.category, due_at:d.dueAt||null, location:d.location, title:d.title, detail:d.detail};
+      if(d.status!==cur.status) patch.closed_at = d.status==='closed' ? todayISO() : null;
+      await q(sb.from('cases').update(patch).eq('id',id), 'บันทึกเคส');
+      if(changes.length) await addLog(id, changes.join(' · '));
+      if(note) await addLog(id, '📝 '+note);
+      toast('บันทึกแล้ว'); await loadAll(); openCase(id, true);
+    }finally{ busy(btn,false); }
+  };
+}
+async function rework(id){
+  const c=DB.cases.find(x=>x.id===id); const why=prompt('เหตุผลที่ต้อง Rework'); if(why===null) return;
+  const n=c.rework+1;
+  await q(sb.from('cases').update({rework:n, status:'rework'}).eq('id',id), 'ส่ง Rework');
+  await addLog(id, `ส่ง Rework ครั้งที่ ${n}${why?': '+why:''}`);
+  if(n>MAX_REWORK) await addLog(id, `⚠️ Rework เกิน ${MAX_REWORK} รอบ — แจ้ง Manager`);
+  await loadAll(); openCase(id, true);
+}
+async function addPhotos(id,tag,input){
+  const files=[...input.files]; if(!files.length) return; toast('กำลังอัปโหลดรูป…');
+  const added = await uploadPhotos(id, files, tag);
+  const c=DB.cases.find(x=>x.id===id);
+  await q(sb.from('cases').update({photos:[...c.photos, ...added]}).eq('id',id), 'บันทึกรูป');
+  await addLog(id, `เพิ่มภาพ ${tag==='before'?'Before':'After'} ${files.length} ภาพ`);
+  await loadAll(); openCase(id, true); toast('อัปโหลดรูปแล้ว');
+}
+async function delPhoto(id,pid){
+  if(!confirm('ลบรูปนี้?')) return;
+  const c=DB.cases.find(x=>x.id===id); const p=c.photos.find(x=>x.id===pid);
+  await q(sb.from('cases').update({photos:c.photos.filter(x=>x.id!==pid)}).eq('id',id), 'ลบรูป');
+  if(p?.path) await sb.storage.from(BUCKET).remove([p.path]);
+  await loadAll(); openCase(id, true);
+}
+async function delCase(id){
+  if(!confirm('ลบเคสนี้?')) return;
+  const c=DB.cases.find(x=>x.id===id);
+  await q(sb.from('cases').delete().eq('id',id), 'ลบเคส');
+  if(c?.photos?.length) await sb.storage.from(BUCKET).remove(c.photos.map(p=>p.path));
+  closeAll(); toast('ลบเคสแล้ว'); scheduleReload();
+}
+
+/* ============ HANDOVER DOC ============ */
+function openHandover(customerId){
+  const c=customer(customerId); const cs=DB.cases.filter(x=>x.customerId===customerId);
+  if(!cs.length) return toast('บ้านนี้ยังไม่มีเคส');
+  modal(`<button class="x" onclick="closeAll()">×</button><h2>ออกใบส่งมอบงาน</h2><p class="sub">${esc(c.name)} · เลือกเคสที่จะส่งมอบ</p>
+  <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px">${cs.map(x=>`<label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" value="${x.id}" ${['confirm','closed','verify'].includes(x.status)?'checked':''}> <span><span class="mono">${esc(x.code)}</span> ${esc(x.title)} ${badge(st(x.status))}</span></label>`).join('')}</div>
+  <label style="display:flex;gap:8px;margin-top:14px;font-size:13px"><input type="checkbox" id="ho-close"> ปิดเคสที่เลือกหลังพิมพ์ (สถานะ → ปิดเคส)</label>
+  <div class="actions"><button class="btn" onclick="closeAll()">ยกเลิก</button><button class="btn primary" id="ho-print">${I.doc} พิมพ์ / บันทึก PDF</button></div>`);
+  $('#ho-print').onclick=async()=>{
+    const ids=[...document.querySelectorAll('#modal input[type=checkbox][value]:checked')].map(i=>i.value);
+    if(!ids.length) return toast('กรุณาเลือกอย่างน้อย 1 เคส');
+    const sel=cs.filter(x=>ids.includes(x.id));
+    $('#print-area').innerHTML = `<h1>ใบส่งมอบงานบริการหลังการขาย</h1><p style="text-align:center;margin:0 0 18px">Aftersale Service · วันที่ ${thDateLong()}</p>
+    <table style="width:100%;margin-bottom:14px"><tbody>
+      <tr><td style="width:22%"><b>ลูกค้า</b></td><td>${esc(c.name)}</td><td style="width:18%"><b>โทรศัพท์</b></td><td>${esc(c.phone||'-')}</td></tr>
+      <tr><td><b>โครงการ / บ้านเลขที่</b></td><td>${esc([c.project,c.house].filter(Boolean).join(' / ')||'-')}</td><td><b>วันส่งมอบบ้าน</b></td><td>${thDate(c.handoverDate)}</td></tr>
+      <tr><td><b>ที่อยู่</b></td><td colspan="3">${esc(c.address||'-')}</td></tr></tbody></table>
+    <table style="width:100%"><thead><tr><th>#</th><th>เลขเคส</th><th>รายการแจ้งซ่อม</th><th>ตำแหน่ง</th><th>วันที่แจ้ง</th><th>ผลการแก้ไข</th></tr></thead><tbody>
+    ${sel.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.code)}</td><td>${esc(x.title)}${x.detail?'<br><small>'+esc(x.detail)+'</small>':''}</td><td>${esc(x.location||'-')}</td><td>${thDate(x.openedAt)}</td><td>☐ เรียบร้อย &nbsp; ☐ ไม่เรียบร้อย</td></tr>`).join('')}</tbody></table>
+    <p style="margin-top:16px">ข้าพเจ้าได้ตรวจสอบงานแก้ไขตามรายการข้างต้นแล้ว และยอมรับการส่งมอบงาน</p>
+    <div class="sign"><div>ลงชื่อ ..................................................<br>(${esc(c.name)})<br>ลูกค้า<br>วันที่ ........../........../..........</div>
+    <div>ลงชื่อ ..................................................<br>(..................................................)<br>เจ้าหน้าที่ Aftersale Service<br>วันที่ ........../........../..........</div></div>`;
+    const closeAfter=$('#ho-close').checked;
+    closeAll(); window.print();
+    if(closeAfter){
+      for(const x of sel) if(x.status!=='closed'){ await q(sb.from('cases').update({status:'closed', closed_at:todayISO()}).eq('id',x.id), 'ปิดเคส'); await addLog(x.id,'ปิดเคส (ออกใบส่งมอบงาน)'); }
+      toast('ปิดเคสแล้ว'); scheduleReload();
+    }
+  };
+}
+
+/* ============ AUTH ============ */
+let authMode = 'in';
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+  authMode=b.dataset.mode; document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));
+  $('#name-field').classList.toggle('hidden', authMode!=='up'); $('#auth-btn').textContent = authMode==='up'?'สมัครใช้งาน':'เข้าสู่ระบบ'; $('#auth-err').textContent='';
+});
+$('#auth-form').onsubmit=async e=>{
+  e.preventDefault(); const d=Object.fromEntries(new FormData(e.target)); const err=$('#auth-err'); err.textContent='';
+  busy($('#auth-btn'),true);
+  try{
+    if(authMode==='up'){
+      const {data,error}=await sb.auth.signUp({email:d.email, password:d.password, options:{data:{name:d.name||d.email.split('@')[0]}, emailRedirectTo:location.href.split('#')[0]}});
+      if(error) throw error;
+      if(!data.session){ err.style.color='var(--green)'; err.textContent='สมัครแล้ว กรุณายืนยันอีเมลจากกล่องจดหมาย แล้วกลับมาเข้าสู่ระบบ'; return; }
+    }else{
+      const {error}=await sb.auth.signInWithPassword({email:d.email, password:d.password});
+      if(error) throw error;
+    }
+  }catch(ex){
+    err.style.color=''; err.textContent = /Invalid login/i.test(ex.message)?'อีเมลหรือรหัสผ่านไม่ถูกต้อง':/not confirmed/i.test(ex.message)?'ยังไม่ได้ยืนยันอีเมล กรุณาเช็กกล่องจดหมาย':ex.message;
+  }finally{ busy($('#auth-btn'),false); }
+};
+async function signOut(){ await sb.auth.signOut(); location.reload(); }
+
+let started = false;
+async function onSession(session){
+  if(!session){ show('#auth-screen'); return; }
+  if(started) return; started = true;
+  show('#loading');
+  const {data:prof, error} = await sb.rpc('ensure_profile');
+  if(error){ $('#loading').innerHTML = `<div class="auth-card"><h2>ยังไม่ได้ตั้งค่าฐานข้อมูล</h2><p class="sub">กรุณารันไฟล์ <b>supabase-setup.sql</b> ใน Supabase → SQL Editor ก่อน<br><small>${esc(error.message)}</small></p><div class="actions"><button class="btn" onclick="signOut()">ออกจากระบบ</button><button class="btn primary" onclick="location.reload()">ลองใหม่</button></div></div>`; return; }
+  ME = prof;
+  if(ME.role==='pending'){ $('#pending-email').textContent=ME.email||''; show('#pending-screen'); subscribe(); return; }
+  await loadAll(); subscribe();
+}
+
+$('#setup-form').onsubmit=e=>{
+  e.preventDefault(); const d=Object.fromEntries(new FormData(e.target));
+  if(!/^https:\/\/.+/.test(d.url.trim())) return $('#setup-err').textContent='Project URL ต้องขึ้นต้นด้วย https://';
+  let payload=''; try{ payload=atob((d.key.split('.')[1]||'').replace(/-/g,'+').replace(/_/g,'/')); }catch(e){}
+  if(/service_role/.test(payload) || /^sb_secret_/.test(d.key.trim())) return $('#setup-err').textContent='นี่คือ secret / service_role key ห้ามใช้ในหน้าเว็บ กรุณาใช้ anon หรือ publishable key';
+  localStorage.setItem('afs-supabase', JSON.stringify({url:d.url.trim().replace(/\/$/,''), key:d.key.trim()})); location.reload();
+};
+
+/* ============ INIT ============ */
+$('#menu-btn').onclick=()=>$('#sidebar').classList.toggle('open');
+(async function init(){
+  const cfg = getConfig();
+  if(!window.supabase){ $('#loading').textContent='โหลดไลบรารีไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วรีเฟรช'; return; }
+  if(!cfg){ show('#setup-screen'); return; }
+  sb = supabase.createClient(cfg.url, cfg.key);
+  const {data:{session}} = await sb.auth.getSession();
+  await onSession(session);
+  sb.auth.onAuthStateChange((ev, s)=>{ if(ev==='SIGNED_IN') onSession(s); if(ev==='SIGNED_OUT') location.reload(); });
+})();
+</script>
+</body>
+</html>
