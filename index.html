@@ -184,6 +184,31 @@ tbody tr:last-child td{border-bottom:0}
 .cust-table .num{text-align:center}
 .cust-table th{white-space:nowrap}
 .toolbar select{min-width:160px}
+.metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px;margin-bottom:16px}
+.metric{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.metric-icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;margin-bottom:8px}
+.metric-icon svg{width:18px;height:18px}
+.metric-icon.blue{background:var(--blue-soft);color:var(--blue)} .metric-icon.slate{background:var(--gray-soft);color:#475569}
+.metric-icon.indigo{background:var(--violet-soft);color:var(--violet)} .metric-icon.amber{background:var(--orange-soft);color:var(--orange)}
+.metric-icon.green{background:var(--green-soft);color:var(--green)}
+.metric span{color:var(--muted);font-size:13px}
+.metric strong{font-size:28px;line-height:1.2;color:var(--ink)}
+.metric .metric-money{font-size:22px}
+.metric small{color:var(--muted);font-size:12px}
+.insights{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.panel-title h2{margin:0;font-size:16px} .panel-title p{margin:2px 0 10px;color:var(--muted);font-size:13px}
+.pie-box{display:flex;flex-direction:column;align-items:center;gap:12px}
+.donut{width:200px;height:200px}
+.donut .arc{transition:stroke-width .15s;cursor:default} .donut .arc:hover{stroke-width:28}
+.donut-n{font-size:30px;font-weight:700;fill:var(--ink)} .donut-l{font-size:11px;fill:var(--muted)}
+.pie-legend{width:100%;display:flex;flex-direction:column;gap:6px}
+.pie-legend div{display:grid;grid-template-columns:10px 1fr auto;gap:8px;align-items:center;font-size:13px}
+.pie-legend i{width:10px;height:10px;border-radius:3px}
+.pie-legend span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.pie-legend strong{color:var(--ink);font-weight:600}
+.overall-footnote{margin-top:14px;color:var(--muted);font-size:12px}
+@media (max-width:1200px){ .metrics{grid-template-columns:repeat(3,minmax(0,1fr))} .insights{grid-template-columns:1fr 1fr} }
+@media (max-width:700px){ .metrics{grid-template-columns:repeat(2,minmax(0,1fr))} .insights{grid-template-columns:1fr} }
 .auth-screen{position:fixed;inset:0;background:var(--bg);z-index:80;display:grid;place-items:center;padding:16px}
 .auth-card{width:min(420px,100%);background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:28px}
 .auth-card .brand{display:flex;gap:12px;align-items:center;margin-bottom:18px}
@@ -399,7 +424,7 @@ function fillWarranty(d){
 }
 const wEndOf = c => c.warrantyEnd || (c.handoverDate ? addYears(c.handoverDate,WARRANTY_YEARS) : '');
 const fromCase = r => ({id:r.id, code:r.code, customerId:r.customer_id, title:r.title||'', detail:r.detail||'', location:r.location||'', category:r.category||'อื่นๆ', priority:r.priority, status:r.status, assignee:r.assignee||'', openedAt:r.opened_at, dueAt:r.due_at||'', closedAt:r.closed_at||'', rework:r.rework||0, photos:r.photos||[],
-  subcategory:r.subcategory||'', warranty:r.warranty||'', origContractor:r.orig_contractor||'', fixContractor:r.fix_contractor||'', visitDue:r.visit_due||'', visitedAt:r.visited_at||'', closeReqAt:r.close_requested_at||'', closeReqBy:r.close_requested_by||'', closeReqNote:r.close_request_note||''});
+  subcategory:r.subcategory||'', warranty:r.warranty||'', origContractor:r.orig_contractor||'', fixContractor:r.fix_contractor||'', visitDue:r.visit_due||'', visitedAt:r.visited_at||'', closeReqAt:r.close_requested_at||'', closeReqBy:r.close_requested_by||'', closeReqNote:r.close_request_note||'', claimCost:r.claim_cost==null?'':Number(r.claim_cost)});
 
 async function loadAll(){
   const [cu, ca, lg, us] = await Promise.all([
@@ -469,32 +494,56 @@ function head(eyebrow, title, desc){
 }
 
 /* ============ OVERALL ============ */
+const SERIES = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#4a3aa7','#e34948'];
+const fmtMoney = n => Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2, maximumFractionDigits:2});
+// Donut: ส่วนของทั้งหมด, ช่องว่าง 2px ระหว่างชิ้น, legend + จำนวนทุกชิ้น, hover แสดงค่า
+function donut(items, centerLabel, emptyText){
+  const total = items.reduce((a,i)=>a+i.n,0);
+  const R=70, C=2*Math.PI*R, GAP = items.filter(i=>i.n).length>1 ? 2 : 0;
+  let off=0;
+  const arcs = total ? items.map((it,idx)=>{ if(!it.n) return ''; const len=it.n/total*C; const seg=`<circle class="arc" cx="90" cy="90" r="${R}" fill="none" stroke="${it.color}" stroke-width="22" stroke-dasharray="${Math.max(len-GAP,0.5)} ${C}" stroke-dashoffset="${-off}" transform="rotate(-90 90 90)"><title>${esc(it.label)}: ${it.n} เคส (${Math.round(it.n/total*100)}%)</title></circle>`; off+=len; return seg; }).join('')
+    : `<circle cx="90" cy="90" r="${R}" fill="none" stroke="var(--line)" stroke-width="22"/>`;
+  return `<div class="pie-box"><svg viewBox="0 0 180 180" class="donut" role="img" aria-label="${esc(centerLabel)}">${arcs}
+      <text x="90" y="88" text-anchor="middle" class="donut-n">${total}</text><text x="90" y="108" text-anchor="middle" class="donut-l">${esc(centerLabel)}</text></svg>
+    <div class="pie-legend">${items.map(it=>`<div><i style="background:${it.color}"></i><span title="${esc(it.label)}">${esc(it.label)}</span><strong>${it.n}${it.suffix||''}</strong></div>`).join('') || `<div class="sub">${emptyText||'ยังไม่มีข้อมูล'}</div>`}</div></div>`;
+}
+function topN(map, n=6){
+  const arr=Object.entries(map).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'th'));
+  if(arr.length<=n) return arr;
+  const head=arr.slice(0,n-1), rest=arr.slice(n-1).reduce((a,x)=>a+x[1],0);
+  return [...head, ['อื่นๆ', rest]];
+}
 function renderOverall(){
-  const cs = DB.cases, open = cs.filter(isOpen), closed = cs.filter(c=>!isOpen(c)), over = cs.filter(isOverdue);
-  const onTime = closed.filter(c=>c.closedAt && c.dueAt && c.closedAt<=c.dueAt).length;
-  const sla = closed.length ? Math.round(onTime/closed.length*100) : null;
-  const reworkRate = cs.length ? Math.round(cs.filter(c=>c.rework>0).length/cs.length*100) : 0;
-  const colorOf = cls => ({'b-red':'var(--red)','b-orange':'var(--orange)','b-blue':'var(--blue)','b-green':'var(--green)','b-violet':'var(--violet)'}[cls]);
-  const bars = items => { const max=Math.max(1,...items.map(i=>i.n)); return `<div class="bars">${items.map(i=>`<div class="bar-row"><span>${esc(i.label)}</span><div class="bar-track"><div class="bar-fill" style="width:${i.n/max*100}%;background:${i.color||'var(--primary)'}"></div></div><b>${i.n}</b></div>`).join('')}</div>`; };
-  const byStatus = STATUSES.map(s=>({label:s.label, n:cs.filter(c=>c.status===s.key).length, color:colorOf(s.cls)}));
-  const byCat = CATEGORIES.map(k=>({label:k, n:cs.filter(c=>c.category===k).length})).filter(x=>x.n).sort((a,b)=>b.n-a.n);
-  const urgent = open.slice().sort((a,b)=>(isOverdue(b)-isOverdue(a)) || (a.dueAt||'').localeCompare(b.dueAt||'')).slice(0,8);
-  $('#view').innerHTML = head('ภาพรวม','Overall','สรุปสถานะเคสบริการหลังการขายทั้งหมด') + `
-  <div class="kpis">
-    <div class="kpi blue"><small>เคสทั้งหมด</small><b>${cs.length}</b><i>${DB.customers.length} โครงการ / บ้าน</i></div>
-    <div class="kpi"><small>กำลังติดตาม</small><b>${open.length}</b><i>ยังไม่ปิดเคส</i></div>
-    <div class="kpi red"><small>เกินกำหนด SLA</small><b>${over.length}</b><i>ต้องเร่งดำเนินการ</i></div>
-    <div class="kpi green"><small>ปิดแล้ว</small><b>${closed.length}</b><i>SLA ทันเวลา ${sla===null?'-':sla+'%'}</i></div>
-    <div class="kpi" style="cursor:pointer" onclick="go('dashboard')"><small>รออนุมัติปิดเคส</small><b>${cs.filter(closePending).length}</b><i>คำขอจากทีม</i></div>
-    <div class="kpi"><small>Rework Rate</small><b>${reworkRate}%</b><i>เคสที่มีการแก้ซ้ำ</i></div>
-  </div>
-  <div class="grid-2">
-    <div class="panel"><h3>เคสตามสถานะ</h3><p class="sub">จำนวนเคสในแต่ละขั้นตอน</p>${bars(byStatus)}</div>
-    <div class="panel"><h3>เคสตามประเภทปัญหา</h3><p class="sub">หมวดที่ถูกแจ้งบ่อย</p>${byCat.length?bars(byCat):'<div class="empty">ยังไม่มีข้อมูล</div>'}</div>
-  </div>
-  <div class="panel"><div class="records-head" style="margin-bottom:10px"><div><h3>เคสที่ต้องติดตามด่วน</h3><p class="sub">เรียงตามกำหนดแก้ไข เคสเกินกำหนดขึ้นก่อน</p></div><button class="btn sm" onclick="go('dashboard')">ดูทุกเคส →</button></div>
-  ${caseTable(urgent)}</div>`;
-  bindRows();
+  const cs = DB.cases;
+  const inW = cs.filter(c=>/^in/i.test(c.warranty)), outW = cs.filter(c=>/^out/i.test(c.warranty));
+  const open = cs.filter(isOpen), over = cs.filter(isOverdue);
+  const houses = new Set(cs.map(c=>c.customerId)).size;
+  const inClosed = inW.filter(c=>!isOpen(c)).length;
+  const claim = inW.reduce((a,c)=>a+(Number(c.claimCost)||0),0);
+  const pending = cs.filter(closePending).length;
+  const count = (list, key) => list.reduce((m,c)=>{ const k=key(c); m[k]=(m[k]||0)+1; return m; },{});
+  const catItems = topN(count(inW, c=>c.category||'ไม่ระบุ')).map(([label,n],i)=>({label,n,color:SERIES[i]}));
+  const conItems = topN(count(inW, c=>c.origContractor&&c.origContractor!=='—'?c.origContractor:'ไม่ระบุผู้รับเหมางานเดิม')).map(([label,n],i)=>({label,n,color:SERIES[i]}));
+  const MAIN = ['new','assigned','verifycase','progress','closed'];
+  const stItems = STATUSES.filter(x=>MAIN.includes(x.key)||inW.some(c=>c.status===x.key)).map((x,i)=>({label:x.label, n:inW.filter(c=>c.status===x.key).length, color:SERIES[i%SERIES.length], suffix:' เคส'}));
+  const metric = (icon, cls, label, val, sub, onclick) => `<div class="metric" ${onclick?`style="cursor:pointer" onclick="${onclick}"`:''}><div class="metric-icon ${cls}">${icon}</div><span>${label}</span><strong>${val}</strong><small>${sub}</small></div>`;
+  const ic = p => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+  $('#view').innerHTML = `<div class="page-head"><div><div class="eyebrow">${I.pin} ภาพรวมสำหรับผู้บริหาร</div><h1>Overall</h1><p>ภาพรวมเคลมในประกัน แยกหมวดงานและผู้รับเหมางานเดิม</p></div><div class="today">ข้อมูล ณ ${thDateLong()}</div></div>
+  ${pending?`<div class="notice" style="background:var(--orange-soft);color:#8a4a0b;cursor:pointer" onclick="go('dashboard')">⏳ มีคำขอปิดเคสรอ Admin / Manager อนุมัติ <b>${pending}</b> เคส — กดเพื่อดู</div>`:''}
+  <section class="metrics">
+    ${metric(ic('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>'),'blue','เคสในประกัน',inW.length,'In warranty')}
+    ${metric(ic('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9.5 9.5l5 5M14.5 9.5l-5 5"/>'),'slate','งานนอกประกัน',outW.length,'Out of warranty')}
+    ${metric(ic('<path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/>'),'indigo','บ้านที่มีเคลม',houses,'หลัง',"go('projects')")}
+    ${metric(ic('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),'amber','กำลังติดตาม',open.length,`${over.length} เคสเกินกำหนด`,"filters.overdue='open';go('dashboard')")}
+    ${metric(ic('<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>'),'green','ปิดเคสแล้ว',inClosed,`${inW.length?Math.round(inClosed/inW.length*100):0}% ของเคสในประกัน`)}
+    ${metric(ic('<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>'),'indigo','มูลค่างาน Claim',`<span class="metric-money">${fmtMoney(claim)}</span>`,'บาท · เคส In warranty')}
+  </section>
+  <section class="insights">
+    <div class="panel"><div class="panel-title"><h2>หมวดงานที่เกิดเคลมบ่อย</h2><p>เฉพาะเคส In warranty · ${inW.length} เคส</p></div>${donut(catItems,'เคสในประกัน')}</div>
+    <div class="panel"><div class="panel-title"><h2>ผู้รับเหมางานเดิมที่ถูกเคลมบ่อย</h2><p>นับเฉพาะเคส In warranty ตามผู้รับเหมางานเดิม</p></div>${donut(conItems,'เคสในประกัน')}</div>
+    <div class="panel"><div class="panel-title"><h2>สถานะเคส</h2><p>เฉพาะเคส In warranty · แยกตาม Stage ปัจจุบัน</p></div>${donut(stItems,'เคสในประกัน')}</div>
+  </section>
+  <div class="overall-footnote">นับจำนวนเคสที่เลือก In warranty เท่านั้น · ผู้รับเหมาหมายถึงผู้รับเหมางานเดิมที่บันทึกในเคส ตัวเลขแสดงความถี่ของการเคลม ไม่ใช่ข้อสรุปความรับผิด</div>`;
 }
 
 /* ============ PROJECTS ============ */
@@ -695,8 +744,8 @@ function contractorPanel(){
   ${rows.map(([n,v])=>`<tr style="cursor:pointer" onclick="filters.q='${esc(n).replace(/'/g,"\\'")}';renderDashboard()"><td>${esc(n)}</td><td style="text-align:center">${v.orig||'<span class="sub">0</span>'}</td><td style="text-align:center">${v.fix||'<span class="sub">0</span>'}</td></tr>`).join('')}</tbody></table></div></div>`;
 }
 function exportCSV(){
-  const rows=[['เลขเคส','รหัสบ้าน','ลูกค้า','เรื่อง','รายละเอียด','ตำแหน่ง','ประเภท','ประเภทย่อย','Warranty','งานเดิมโดย','เข้าแก้โดย','ความสำคัญ','สถานะ','ผู้รับผิดชอบ','เปิดเคส','SLA เข้าแก้','เข้าแก้จริง','กำหนดปิด','ปิดเคส','Rework']];
-  DB.cases.forEach(c=>{ const cu=customer(c.customerId); rows.push([c.code,cu.house,cu.name,c.title,c.detail,c.location,c.category,c.subcategory,c.warranty,c.origContractor,c.fixContractor,pr(c.priority).label,st(c.status).label,c.assignee,c.openedAt,c.visitDue,c.visitedAt,c.dueAt,c.closedAt,c.rework]); });
+  const rows=[['เลขเคส','รหัสบ้าน','ลูกค้า','เรื่อง','รายละเอียด','ตำแหน่ง','ประเภท','ประเภทย่อย','Warranty','งานเดิมโดย','เข้าแก้โดย','ความสำคัญ','สถานะ','ผู้รับผิดชอบ','เปิดเคส','SLA เข้าแก้','เข้าแก้จริง','กำหนดปิด','ปิดเคส','Rework','มูลค่างาน Claim']];
+  DB.cases.forEach(c=>{ const cu=customer(c.customerId); rows.push([c.code,cu.house,cu.name,c.title,c.detail,c.location,c.category,c.subcategory,c.warranty,c.origContractor,c.fixContractor,pr(c.priority).label,st(c.status).label,c.assignee,c.openedAt,c.visitDue,c.visitedAt,c.dueAt,c.closedAt,c.rework,c.claimCost]); });
   download('afs-cases-'+todayISO()+'.csv', '﻿'+rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n'), 'text/csv');
 }
 function download(name, data, type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type})); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
@@ -932,6 +981,7 @@ function caseExtraFields(c, ed=true){
     <label>Warranty<select name="warranty" ${dis}><option value="">—</option>${WARRANTY_OPTS.map(w=>`<option ${c.warranty===w?'selected':''}>${w}</option>`).join('')}</select></label>
     <label>งานเดิมโดย (ผู้รับเหมา)<input name="origContractor" value="${esc(c.origContractor||'')}" list="contractors" ${dis}></label>
     <label>เข้าแก้โดย<input name="fixContractor" value="${esc(c.fixContractor||'')}" list="contractors" ${dis}></label>
+    <label>มูลค่างาน Claim (บาท)<input name="claimCost" type="number" step="0.01" min="0" value="${c.claimCost===''||c.claimCost==null?'':c.claimCost}" ${dis}></label>
     <datalist id="contractors">${contractorList().map(n=>`<option value="${esc(n)}">`).join('')}</datalist>`;
 }
 function openNewCase(customerId){
@@ -959,7 +1009,7 @@ function openNewCase(customerId){
       const opened = d.openedAt || todayISO();
       const row = await q(sb.from('cases').insert({customer_id:d.customerId, title:d.title, detail:d.detail, location:d.location, category:d.category, priority:d.priority,
         status:d.assignee?'assigned':'new', assignee:d.assignee, opened_at:opened, due_at:d.dueAt||null, visit_due:addDays(opened, pr(d.priority).days),
-        subcategory:d.subcategory, warranty:d.warranty, orig_contractor:d.origContractor, fix_contractor:d.fixContractor}).select().single(), 'เปิดเคส');
+        subcategory:d.subcategory, warranty:d.warranty, orig_contractor:d.origContractor, fix_contractor:d.fixContractor, claim_cost:d.claimCost===''?null:Number(d.claimCost)}).select().single(), 'เปิดเคส');
       await addLog(row.id, 'เปิดเคส'+(d.assignee?` · มอบหมายให้ ${d.assignee}`:''));
       const files = fd.getAll('photos').filter(f=>f.size);
       if(files.length){ const photos = await uploadPhotos(row.id, files, 'before'); await q(sb.from('cases').update({photos}).eq('id',row.id), 'บันทึกรูป'); }
@@ -987,6 +1037,7 @@ async function openCase(id, silent){
     <div><small>วันที่เปิดเคส</small>${thDate(c.openedAt)}</div>
     <div><small>ประเภท</small>${esc(c.category)}${c.subcategory?'<br><span class="sub">'+esc(c.subcategory)+'</span>':''}</div>
     <div><small>Warranty</small>${esc(c.warranty||'-')}</div>
+    <div><small>มูลค่างาน Claim</small>${c.claimCost!==''?fmtMoney(c.claimCost)+' บาท':'-'}</div>
     <div><small>งานเดิมโดย / เข้าแก้โดย</small>${esc(c.origContractor||'—')} / ${esc(c.fixContractor||'—')}</div>
     <div><small>SLA เข้าแก้</small><span class="${visitLate(c)?'overdue':''}">${c.visitedAt?'เข้าแก้แล้ว '+thDate(c.visitedAt):'ภายใน '+thDate(c.visitDue)}</span></div>
     <div><small>กำหนดปิด</small><span class="${closeLate(c)?'overdue':''}">${thDate(c.dueAt)}</span></div>
@@ -1035,10 +1086,11 @@ async function openCase(id, silent){
     if(d.dueAt!==cur.dueAt) changes.push(`กำหนดปิด: ${thDate(d.dueAt)}`);
     if(d.visitedAt!==cur.visitedAt) changes.push(`เข้าแก้: ${thDate(d.visitedAt)}`);
     if(d.fixContractor!==cur.fixContractor) changes.push(`เข้าแก้โดย: ${d.fixContractor||'-'}`);
+    if(String(d.claimCost)!==String(cur.claimCost)) changes.push(`มูลค่างาน Claim: ${d.claimCost?fmtMoney(d.claimCost)+' บาท':'-'}`);
     const note=d.note.trim();
     try{
       const patch = {status:d.status, assignee:d.assignee, priority:d.priority, category:d.category, due_at:d.dueAt||null, location:d.location, title:d.title, detail:d.detail,
-        subcategory:d.subcategory, warranty:d.warranty, orig_contractor:d.origContractor, fix_contractor:d.fixContractor, visit_due:d.visitDue||null, visited_at:d.visitedAt||null};
+        subcategory:d.subcategory, warranty:d.warranty, orig_contractor:d.origContractor, fix_contractor:d.fixContractor, visit_due:d.visitDue||null, visited_at:d.visitedAt||null, claim_cost:d.claimCost===''?null:Number(d.claimCost)};
       if(d.status!==cur.status) patch.closed_at = d.status==='closed' ? todayISO() : null;
       await q(sb.from('cases').update(patch).eq('id',id), 'บันทึกเคส');
       if(changes.length) await addLog(id, changes.join(' · '));
