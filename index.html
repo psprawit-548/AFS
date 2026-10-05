@@ -290,22 +290,25 @@ const SUPABASE_ANON_KEY = 'sb_publishable_e6CfQ34AgjD3ccQm9XpRzg_5rQQyk4i';
 
 /* ============ CONFIG ============ */
 const STATUSES = [
-  {key:'new', label:'ใหม่', cls:'b-blue'},
-  {key:'assigned', label:'มอบหมายแล้ว', cls:'b-violet'},
-  {key:'progress', label:'กำลังดำเนินการ', cls:'b-orange'},
-  {key:'verify', label:'รอตรวจสอบคุณภาพ', cls:'b-violet'},
+  {key:'new', label:'Open', cls:'b-blue'},
+  {key:'assigned', label:'Assign', cls:'b-violet'},
+  {key:'verifycase', label:'VerifyCase', cls:'b-violet'},
+  {key:'progress', label:'OnProcess', cls:'b-orange'},
+  {key:'verify', label:'รอตรวจ QC', cls:'b-violet'},
   {key:'rework', label:'Rework', cls:'b-red'},
   {key:'confirm', label:'รอลูกค้ายืนยัน', cls:'b-blue'},
-  {key:'closed', label:'ปิดเคส', cls:'b-green'},
+  {key:'closed', label:'Closed', cls:'b-green'},
   {key:'escalated', label:'Escalated', cls:'b-red'},
 ];
+// ความสำคัญ: days = SLA เข้าแก้ (นับจากวันเปิดเคส)
 const PRIORITIES = [
-  {key:'critical', label:'Critical', cls:'b-red', days:1},
-  {key:'high', label:'High', cls:'b-orange', days:3},
-  {key:'normal', label:'Normal', cls:'b-blue', days:7},
-  {key:'low', label:'Low', cls:'b-green', days:14},
+  {key:'critical', label:'แดง', cls:'b-red', days:1},
+  {key:'high', label:'เหลือง', cls:'b-orange', days:2},
+  {key:'normal', label:'เขียว', cls:'b-green', days:4},
+  {key:'low', label:'ต่ำ', cls:'b-gray', days:7},
 ];
-const CATEGORIES = ['โครงสร้าง','ไฟฟ้า','ประปา','สี/ผิวผนัง','หลังคา/รั่วซึม','ประตู/หน้าต่าง','พื้น/กระเบื้อง','อื่นๆ'];
+const CATEGORIES = ['AR · สถาปัตย์ (Architect)','ST · โครงสร้าง (Structure)','EE · งานระบบไฟฟ้า (Electrical)','SN · งานระบบสุขาภิบาล (Sanitary)','IN · สุขภัณฑ์ (Sanitary Ware==>Interior)','RF · หลังคา (Roof)','FU · งานเฟอร์นิเจอร์ (Furniture)','อื่นๆ'];
+const WARRANTY_OPTS = ['In warranty','Out of warranty'];
 const ROLES = {
   admin:   {label:'Admin',   perms:{create:1,edit:1,close:1,delete:1,users:1,import:1}},
   manager: {label:'Manager', perms:{create:1,edit:1,close:1,delete:1,users:0,import:1}},
@@ -348,7 +351,10 @@ const st = k => STATUSES.find(s=>s.key===k) || STATUSES[0];
 const pr = k => PRIORITIES.find(p=>p.key===k) || PRIORITIES[2];
 const badge = o => `<span class="badge ${o.cls}">${esc(o.label)}</span>`;
 const isOpen = c => c.status !== 'closed';
-const isOverdue = c => isOpen(c) && c.dueAt && c.dueAt < todayISO();
+const visitLate = c => isOpen(c) && !c.visitedAt && c.visitDue && c.visitDue < todayISO();   // เกิน SLA เข้าแก้
+const closeLate = c => isOpen(c) && c.dueAt && c.dueAt < todayISO();                          // เกินกำหนดปิด
+const isOverdue = c => visitLate(c) || closeLate(c);
+const catShort = v => String(v||'').split(' · ')[0];
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>t.style.display='none',2800); }
 function show(id){ ['#loading','#setup-screen','#auth-screen','#pending-screen','#app'].forEach(s=>$(s).classList.toggle('hidden', s!==id)); }
 
@@ -391,7 +397,8 @@ function fillWarranty(d){
   return d;
 }
 const wEndOf = c => c.warrantyEnd || (c.handoverDate ? addYears(c.handoverDate,WARRANTY_YEARS) : '');
-const fromCase = r => ({id:r.id, code:r.code, customerId:r.customer_id, title:r.title||'', detail:r.detail||'', location:r.location||'', category:r.category||'อื่นๆ', priority:r.priority, status:r.status, assignee:r.assignee||'', openedAt:r.opened_at, dueAt:r.due_at||'', closedAt:r.closed_at||'', rework:r.rework||0, photos:r.photos||[]});
+const fromCase = r => ({id:r.id, code:r.code, customerId:r.customer_id, title:r.title||'', detail:r.detail||'', location:r.location||'', category:r.category||'อื่นๆ', priority:r.priority, status:r.status, assignee:r.assignee||'', openedAt:r.opened_at, dueAt:r.due_at||'', closedAt:r.closed_at||'', rework:r.rework||0, photos:r.photos||[],
+  subcategory:r.subcategory||'', warranty:r.warranty||'', origContractor:r.orig_contractor||'', fixContractor:r.fix_contractor||'', visitDue:r.visit_due||'', visitedAt:r.visited_at||''});
 
 async function loadAll(){
   const [cu, ca, lg, us] = await Promise.all([
@@ -596,15 +603,17 @@ function warrantyBadge(c){
 /* ============ CASE TABLE ============ */
 function caseTable(list, hideCustomer){
   if(!list.length) return `<div class="table-wrap"><div class="empty">ไม่มีเคส</div></div>`;
-  return `<div class="table-wrap"><table><thead><tr><th>เลขเคส</th>${hideCustomer?'':'<th>ลูกค้า / โครงการ</th>'}<th>เรื่องที่แจ้ง</th><th>ประเภท</th><th>Priority</th><th>สถานะ</th><th>ผู้รับผิดชอบ</th><th>เปิดเคส</th><th>กำหนดแก้ไข</th></tr></thead><tbody>
-  ${list.map(c=>`<tr data-case="${c.id}">
-    <td class="mono">${esc(c.code)}</td>
-    ${hideCustomer?'':`<td>${esc(customer(c.customerId).name)}</td>`}
-    <td>${esc(c.title)}${c.rework?` <span class="badge b-red">Rework ×${c.rework}</span>`:''}</td>
-    <td>${esc(c.category)}</td><td>${badge(pr(c.priority))}</td><td>${badge(st(c.status))}</td>
-    <td>${esc(c.assignee||'-')}</td><td style="white-space:nowrap">${thDate(c.openedAt)}</td>
-    <td class="${isOverdue(c)?'overdue':''}" style="min-width:110px">${c.status==='closed'?'ปิด '+thDate(c.closedAt):thDate(c.dueAt)+(isOverdue(c)?' · เกินกำหนด':'')}</td>
-  </tr>`).join('')}</tbody></table></div>`;
+  return `<div class="table-wrap"><table class="case-table"><thead><tr><th>เคส / บ้าน</th><th>ประเภท</th><th>Warranty</th><th>งานเดิมโดย</th><th>เข้าแก้โดย</th><th>ผู้รับผิดชอบ</th><th>ความสำคัญ / SLA เข้าแก้</th><th>กำหนดปิด</th><th>สถานะ</th></tr></thead><tbody>
+  ${list.map(c=>{ const cu=customer(c.customerId); return `<tr data-case="${c.id}">
+    <td style="min-width:240px"><b>${esc(c.title)}</b>${c.rework?` <span class="badge b-red">Rework ×${c.rework}</span>`:''}
+      <div class="sub">${hideCustomer?'':esc(cu.name)+' · '}<span class="mono">${esc(c.code)}</span> · เปิด ${thDate(c.openedAt)}</div></td>
+    <td style="min-width:170px">${esc(c.category)}${c.subcategory?`<div class="sub">${esc(c.subcategory)}</div>`:''}</td>
+    <td style="white-space:nowrap">${c.warranty?`<span class="badge ${/^in/i.test(c.warranty)?'b-green':'b-gray'}">${esc(c.warranty)}</span>`:'<span class="sub">-</span>'}</td>
+    <td>${esc(c.origContractor||'—')}</td><td>${esc(c.fixContractor||'—')}</td><td>${esc(c.assignee||'—')}</td>
+    <td style="white-space:nowrap">${badge(pr(c.priority))}<div class="sub ${visitLate(c)?'overdue':''}">${c.visitedAt?'เข้าแก้ '+thDate(c.visitedAt):c.visitDue?'ต้องเข้าแก้ภายใน '+thDate(c.visitDue):'—'}</div></td>
+    <td style="white-space:nowrap" class="${closeLate(c)?'overdue':''}">${c.status==='closed'?'ปิด '+thDate(c.closedAt):c.dueAt?thDate(c.dueAt)+(closeLate(c)?' · เกินกำหนด':''):'—'}</td>
+    <td>${badge(st(c.status))}</td>
+  </tr>`; }).join('')}</tbody></table></div>`;
 }
 function bindRows(){ document.querySelectorAll('tr[data-case]').forEach(r=>r.onclick=()=>openCase(r.dataset.case)); }
 
@@ -612,11 +621,12 @@ function bindRows(){ document.querySelectorAll('tr[data-case]').forEach(r=>r.onc
 function renderDashboard(){
   const f = filters;
   $('#view').innerHTML = head('ทุกเคส','Dashboard · ทุกเคส','ค้นหา กรอง และอัปเดตสถานะเคสทั้งหมด') + `
-  <div class="kpis">${STATUSES.map(s=>`<div class="kpi" style="cursor:pointer" onclick="filters.status='${s.key}';renderDashboard()"><small>${s.label}</small><b>${DB.cases.filter(c=>c.status===s.key).length}</b></div>`).join('')}</div>
+  <div class="kpis">${STATUSES.filter(s=>['new','assigned','verifycase','progress','closed'].includes(s.key)||DB.cases.some(c=>c.status===s.key)).map(s=>`<div class="kpi" style="cursor:pointer" onclick="filters.status='${s.key}';renderDashboard()"><small>${s.label}</small><b>${DB.cases.filter(c=>c.status===s.key).length}</b></div>`).join('')}</div>
+  ${contractorPanel()}
   <div class="toolbar">
     <input id="f-q" placeholder="ค้นหาเลขเคส ลูกค้า เรื่องที่แจ้ง ผู้รับผิดชอบ" value="${esc(f.q)}">
     <select id="f-status"><option value="">ทุกสถานะ</option>${STATUSES.map(s=>`<option value="${s.key}" ${f.status===s.key?'selected':''}>${s.label}</option>`).join('')}</select>
-    <select id="f-priority"><option value="">ทุก Priority</option>${PRIORITIES.map(s=>`<option value="${s.key}" ${f.priority===s.key?'selected':''}>${s.label}</option>`).join('')}</select>
+    <select id="f-priority"><option value="">ทุกความสำคัญ</option>${PRIORITIES.map(s=>`<option value="${s.key}" ${f.priority===s.key?'selected':''}>${s.label}</option>`).join('')}</select>
     <select id="f-category"><option value="">ทุกประเภท</option>${CATEGORIES.map(s=>`<option ${f.category===s?'selected':''}>${s}</option>`).join('')}</select>
     <select id="f-overdue"><option value="">ทั้งหมด</option><option value="open" ${f.overdue==='open'?'selected':''}>เฉพาะที่ยังเปิด</option><option value="over" ${f.overdue==='over'?'selected':''}>เฉพาะเกินกำหนด</option></select>
     <button class="btn" onclick="exportCSV()">ส่งออก CSV</button>
@@ -627,16 +637,25 @@ function renderDashboard(){
     const list = DB.cases.filter(c=>
       (!f.status||c.status===f.status)&&(!f.priority||c.priority===f.priority)&&(!f.category||c.category===f.category)&&
       (!f.overdue||(f.overdue==='open'?isOpen(c):isOverdue(c)))&&
-      (!q||[c.code,c.title,c.detail,c.assignee,customer(c.customerId).name].join(' ').toLowerCase().includes(q))
+      (!q||[c.code,c.title,c.detail,c.assignee,c.origContractor,c.fixContractor,c.subcategory,customer(c.customerId).name,customer(c.customerId).house].join(' ').toLowerCase().includes(q))
     ).sort((a,b)=>(b.openedAt||'').localeCompare(a.openedAt||'')||b.code.localeCompare(a.code));
     $('#case-list').innerHTML = `<p class="sub" style="margin:0 0 8px">${list.length} เคส</p>` + caseTable(list); bindRows();
   };
   ['q','status','priority','category','overdue'].forEach(k=>$('#f-'+k)[k==='q'?'oninput':'onchange']=e=>{f[k]=e.target.value;apply();});
   apply();
 }
+function contractorPanel(){
+  const m={}; const add=(n,k)=>{ n=String(n||'').trim(); if(!n||n==='—') return; (m[n] ||= {orig:0,fix:0})[k]++; };
+  DB.cases.forEach(c=>{ add(c.origContractor,'orig'); add(c.fixContractor,'fix'); });
+  const rows=Object.entries(m).sort((a,b)=>(b[1].orig-a[1].orig)||(b[1].fix-a[1].fix)||a[0].localeCompare(b[0],'th'));
+  if(!rows.length) return '';
+  return `<div class="panel" style="margin-bottom:14px"><div class="records-head" style="margin-bottom:8px"><div><h3>ติดตามผู้รับเหมา</h3><p class="sub">จำนวนเคสที่พบในงานเดิมเทียบกับจำนวนเคสที่รับเข้าแก้ไข ตัวเลขนี้ยังไม่ใช่การชี้ความรับผิด</p></div><span class="count">${rows.length} ราย</span></div>
+  <div class="table-wrap"><table><thead><tr><th>ผู้รับเหมา</th><th class="num" style="text-align:center">เคสจากงานเดิม</th><th style="text-align:center">เคสที่เข้าแก้ไข</th></tr></thead><tbody>
+  ${rows.map(([n,v])=>`<tr style="cursor:pointer" onclick="filters.q='${esc(n).replace(/'/g,"\\'")}';renderDashboard()"><td>${esc(n)}</td><td style="text-align:center">${v.orig||'<span class="sub">0</span>'}</td><td style="text-align:center">${v.fix||'<span class="sub">0</span>'}</td></tr>`).join('')}</tbody></table></div></div>`;
+}
 function exportCSV(){
-  const rows=[['เลขเคส','ลูกค้า','เรื่อง','รายละเอียด','ตำแหน่ง','ประเภท','Priority','สถานะ','ผู้รับผิดชอบ','เปิดเคส','กำหนดแก้ไข','ปิดเคส','Rework']];
-  DB.cases.forEach(c=>rows.push([c.code,customer(c.customerId).name,c.title,c.detail,c.location,c.category,pr(c.priority).label,st(c.status).label,c.assignee,c.openedAt,c.dueAt,c.closedAt,c.rework]));
+  const rows=[['เลขเคส','รหัสบ้าน','ลูกค้า','เรื่อง','รายละเอียด','ตำแหน่ง','ประเภท','ประเภทย่อย','Warranty','งานเดิมโดย','เข้าแก้โดย','ความสำคัญ','สถานะ','ผู้รับผิดชอบ','เปิดเคส','SLA เข้าแก้','เข้าแก้จริง','กำหนดปิด','ปิดเคส','Rework']];
+  DB.cases.forEach(c=>{ const cu=customer(c.customerId); rows.push([c.code,cu.house,cu.name,c.title,c.detail,c.location,c.category,c.subcategory,c.warranty,c.origContractor,c.fixContractor,pr(c.priority).label,st(c.status).label,c.assignee,c.openedAt,c.visitDue,c.visitedAt,c.dueAt,c.closedAt,c.rework]); });
   download('afs-cases-'+todayISO()+'.csv', '﻿'+rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n'), 'text/csv');
 }
 function download(name, data, type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type})); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
@@ -865,6 +884,15 @@ async function uploadPhotos(caseId, files, tag){
 }
 
 /* ============ NEW CASE ============ */
+const contractorList = () => [...new Set(DB.cases.flatMap(c=>[c.origContractor,c.fixContractor]).filter(v=>v&&v!=='—'))].sort((a,b)=>a.localeCompare(b,'th'));
+function caseExtraFields(c, ed=true){
+  const dis = ed?'':'disabled';
+  return `<label>ประเภทย่อย<input name="subcategory" value="${esc(c.subcategory||'')}" placeholder="เช่น EE-M-02-03 · เมนไฟ · Breaker ทิป" ${dis}></label>
+    <label>Warranty<select name="warranty" ${dis}><option value="">—</option>${WARRANTY_OPTS.map(w=>`<option ${c.warranty===w?'selected':''}>${w}</option>`).join('')}</select></label>
+    <label>งานเดิมโดย (ผู้รับเหมา)<input name="origContractor" value="${esc(c.origContractor||'')}" list="contractors" ${dis}></label>
+    <label>เข้าแก้โดย<input name="fixContractor" value="${esc(c.fixContractor||'')}" list="contractors" ${dis}></label>
+    <datalist id="contractors">${contractorList().map(n=>`<option value="${esc(n)}">`).join('')}</datalist>`;
+}
 function openNewCase(customerId){
   if(!can('create')) return toast('บทบาทนี้ไม่มีสิทธิ์เปิดเคส');
   if(!DB.customers.length) return toast('กรุณาเพิ่มลูกค้าก่อน');
@@ -873,11 +901,12 @@ function openNewCase(customerId){
     <label class="full">ลูกค้า / โครงการ *<select name="customerId" required>${DB.customers.slice().sort((a,b)=>(a.house||'~').localeCompare(b.house||'~')||a.name.localeCompare(b.name,'th')).map(c=>`<option value="${c.id}" ${c.id===customerId?'selected':''}>${c.house?esc(c.house)+' · ':''}${esc(c.name)}</option>`).join('')}</select></label>
     <label class="full">เรื่องที่แจ้ง *<input name="title" required placeholder="เช่น น้ำรั่วซึมใต้ซิงค์ครัว"></label>
     <label>ประเภทปัญหา<select name="category">${CATEGORIES.map(c=>`<option>${c}</option>`).join('')}</select></label>
-    <label>Priority<select name="priority">${PRIORITIES.map(p=>`<option value="${p.key}" ${p.key==='normal'?'selected':''}>${p.label} (แก้ภายใน ${p.days} วัน)</option>`).join('')}</select></label>
+    <label>ความสำคัญ<select name="priority">${PRIORITIES.map(p=>`<option value="${p.key}" ${p.key==='normal'?'selected':''}>${p.label} (เข้าแก้ภายใน ${p.days} วัน)</option>`).join('')}</select></label>
+    ${caseExtraFields({warranty:''})}
     <label>ตำแหน่งในบ้าน<input name="location" placeholder="เช่น ห้องครัว ชั้น 1"></label>
     <label>ผู้รับผิดชอบ<input name="assignee" list="assignees"><datalist id="assignees">${DB.users.filter(u=>u.role!=='pending').map(u=>`<option value="${esc(u.name)}">`).join('')}</datalist></label>
     <label>วันที่เปิดเคส<input type="date" name="openedAt" value="${todayISO()}"></label>
-    <label>กำหนดแก้ไข (เว้นว่าง = ตาม SLA)<input type="date" name="dueAt"></label>
+    <label>กำหนดปิด (ไม่บังคับ)<input type="date" name="dueAt"></label>
     <label class="full">รายละเอียด<textarea name="detail"></textarea></label>
     <label class="full">แนบภาพ Before (ไม่บังคับ)<input type="file" name="photos" accept="image/*" multiple></label>
     <div class="actions full"><button type="button" class="btn" onclick="closeAll()">ยกเลิก</button><button class="btn primary">เปิดเคส</button></div>
@@ -888,7 +917,8 @@ function openNewCase(customerId){
     try{
       const opened = d.openedAt || todayISO();
       const row = await q(sb.from('cases').insert({customer_id:d.customerId, title:d.title, detail:d.detail, location:d.location, category:d.category, priority:d.priority,
-        status:d.assignee?'assigned':'new', assignee:d.assignee, opened_at:opened, due_at:d.dueAt || addDays(opened, pr(d.priority).days)}).select().single(), 'เปิดเคส');
+        status:d.assignee?'assigned':'new', assignee:d.assignee, opened_at:opened, due_at:d.dueAt||null, visit_due:addDays(opened, pr(d.priority).days),
+        subcategory:d.subcategory, warranty:d.warranty, orig_contractor:d.origContractor, fix_contractor:d.fixContractor}).select().single(), 'เปิดเคส');
       await addLog(row.id, 'เปิดเคส'+(d.assignee?` · มอบหมายให้ ${d.assignee}`:''));
       const files = fd.getAll('photos').filter(f=>f.size);
       if(files.length){ const photos = await uploadPhotos(row.id, files, 'before'); await q(sb.from('cases').update({photos}).eq('id',row.id), 'บันทึกรูป'); }
@@ -914,16 +944,23 @@ async function openCase(id, silent){
     <div><small>ลูกค้า</small><a href="#" onclick="closeAll();go('projects',{customerId:'${cu.id}'});return false">${esc(cu.name)}</a></div>
     <div><small>ตำแหน่งในบ้าน</small>${esc(c.location||'-')}</div>
     <div><small>วันที่เปิดเคส</small>${thDate(c.openedAt)}</div>
-    <div><small>กำหนดแก้ไข</small><span class="${isOverdue(c)?'overdue':''}">${thDate(c.dueAt)}</span></div>
+    <div><small>ประเภท</small>${esc(c.category)}${c.subcategory?'<br><span class="sub">'+esc(c.subcategory)+'</span>':''}</div>
+    <div><small>Warranty</small>${esc(c.warranty||'-')}</div>
+    <div><small>งานเดิมโดย / เข้าแก้โดย</small>${esc(c.origContractor||'—')} / ${esc(c.fixContractor||'—')}</div>
+    <div><small>SLA เข้าแก้</small><span class="${visitLate(c)?'overdue':''}">${c.visitedAt?'เข้าแก้แล้ว '+thDate(c.visitedAt):'ภายใน '+thDate(c.visitDue)}</span></div>
+    <div><small>กำหนดปิด</small><span class="${closeLate(c)?'overdue':''}">${thDate(c.dueAt)}</span></div>
     ${c.closedAt?`<div><small>วันที่ปิดเคส</small>${thDate(c.closedAt)}</div>`:''}
   </div>
   ${c.rework>MAX_REWORK?`<div class="notice" style="background:var(--red-soft);color:var(--red);margin-top:12px">Rework เกิน ${MAX_REWORK} รอบ ควรแจ้ง Manager</div>`:''}
   <form class="form" id="ef">
     <label>สถานะ<select name="status" ${ed?'':'disabled'}>${statusOpts.map(s=>`<option value="${s.key}" ${c.status===s.key?'selected':''}>${s.label}</option>`).join('')}</select></label>
     <label>ผู้รับผิดชอบ<input name="assignee" value="${esc(c.assignee)}" ${ed?'':'disabled'} list="assignees2"><datalist id="assignees2">${DB.users.filter(u=>u.role!=='pending').map(u=>`<option value="${esc(u.name)}">`).join('')}</datalist></label>
-    <label>Priority<select name="priority" ${ed?'':'disabled'}>${PRIORITIES.map(p=>`<option value="${p.key}" ${c.priority===p.key?'selected':''}>${p.label}</option>`).join('')}</select></label>
-    <label>ประเภทปัญหา<select name="category" ${ed?'':'disabled'}>${CATEGORIES.map(x=>`<option ${c.category===x?'selected':''}>${x}</option>`).join('')}</select></label>
-    <label>กำหนดแก้ไข<input type="date" name="dueAt" value="${c.dueAt}" ${ed?'':'disabled'}></label>
+    <label>ความสำคัญ<select name="priority" ${ed?'':'disabled'}>${PRIORITIES.map(p=>`<option value="${p.key}" ${c.priority===p.key?'selected':''}>${p.label}</option>`).join('')}</select></label>
+    <label>ประเภทปัญหา<select name="category" ${ed?'':'disabled'}>${(CATEGORIES.includes(c.category)?CATEGORIES:[c.category,...CATEGORIES]).map(x=>`<option ${c.category===x?'selected':''}>${esc(x)}</option>`).join('')}</select></label>
+    ${caseExtraFields(c, ed)}
+    <label>SLA เข้าแก้ภายใน<input type="date" name="visitDue" value="${c.visitDue}" ${ed?'':'disabled'}></label>
+    <label>วันที่เข้าแก้จริง<input type="date" name="visitedAt" value="${c.visitedAt}" ${ed?'':'disabled'}></label>
+    <label>กำหนดปิด<input type="date" name="dueAt" value="${c.dueAt}" ${ed?'':'disabled'}></label>
     <label>ตำแหน่งในบ้าน<input name="location" value="${esc(c.location)}" ${ed?'':'disabled'}></label>
     <label class="full">เรื่องที่แจ้ง<input name="title" value="${esc(c.title)}" ${ed?'':'disabled'}></label>
     <label class="full">รายละเอียด<textarea name="detail" ${ed?'':'disabled'}>${esc(c.detail)}</textarea></label>
@@ -952,11 +989,14 @@ async function openCase(id, silent){
     const cur = DB.cases.find(x=>x.id===id);
     if(d.status!==cur.status) changes.push(`สถานะ: ${st(cur.status).label} → ${st(d.status).label}`);
     if(d.assignee!==cur.assignee) changes.push(`ผู้รับผิดชอบ: ${d.assignee||'-'}`);
-    if(d.priority!==cur.priority) changes.push(`Priority: ${pr(d.priority).label}`);
-    if(d.dueAt!==cur.dueAt) changes.push(`กำหนดแก้ไข: ${thDate(d.dueAt)}`);
+    if(d.priority!==cur.priority) changes.push(`ความสำคัญ: ${pr(d.priority).label}`);
+    if(d.dueAt!==cur.dueAt) changes.push(`กำหนดปิด: ${thDate(d.dueAt)}`);
+    if(d.visitedAt!==cur.visitedAt) changes.push(`เข้าแก้: ${thDate(d.visitedAt)}`);
+    if(d.fixContractor!==cur.fixContractor) changes.push(`เข้าแก้โดย: ${d.fixContractor||'-'}`);
     const note=d.note.trim();
     try{
-      const patch = {status:d.status, assignee:d.assignee, priority:d.priority, category:d.category, due_at:d.dueAt||null, location:d.location, title:d.title, detail:d.detail};
+      const patch = {status:d.status, assignee:d.assignee, priority:d.priority, category:d.category, due_at:d.dueAt||null, location:d.location, title:d.title, detail:d.detail,
+        subcategory:d.subcategory, warranty:d.warranty, orig_contractor:d.origContractor, fix_contractor:d.fixContractor, visit_due:d.visitDue||null, visited_at:d.visitedAt||null};
       if(d.status!==cur.status) patch.closed_at = d.status==='closed' ? todayISO() : null;
       await q(sb.from('cases').update(patch).eq('id',id), 'บันทึกเคส');
       if(changes.length) await addLog(id, changes.join(' · '));
