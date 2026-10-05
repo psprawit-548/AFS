@@ -380,7 +380,17 @@ function normHouse(h){
   v=v.replace(/^(BAUAR\d{4})_(\d)$/,'$1_0$2');
   return v;
 }
-const wEndOf = c => c.warrantyEnd || (c.handoverDate ? addDays(c.handoverDate,365) : '');
+const addYears = (iso,n) => { const d=new Date(iso+'T00:00:00'); d.setFullYear(d.getFullYear()+n); return localISO(d); };
+const WARRANTY_YEARS = 1, STRUCTURE_YEARS = 5;
+// เติมวันประกันอัตโนมัติ: เริ่มนับ = วัน HO, หมดประกัน = +1 ปี, โครงสร้าง = HO +5 ปี (ถ้ามีงานโครงสร้าง)
+function fillWarranty(d){
+  if(!d.handoverDate && d.hoDate) d.handoverDate = d.hoDate;
+  if(d.handoverDate && !d.warrantyEnd) d.warrantyEnd = addYears(d.handoverDate, WARRANTY_YEARS);
+  const base = d.hoDate || d.handoverDate;
+  if(!d.structNA && !d.structEnd && base) d.structEnd = addYears(base, STRUCTURE_YEARS);
+  return d;
+}
+const wEndOf = c => c.warrantyEnd || (c.handoverDate ? addYears(c.handoverDate,WARRANTY_YEARS) : '');
 const fromCase = r => ({id:r.id, code:r.code, customerId:r.customer_id, title:r.title||'', detail:r.detail||'', location:r.location||'', category:r.category||'อื่นๆ', priority:r.priority, status:r.status, assignee:r.assignee||'', openedAt:r.opened_at, dueAt:r.due_at||'', closedAt:r.closed_at||'', rework:r.rework||0, photos:r.photos||[]});
 
 async function loadAll(){
@@ -730,19 +740,22 @@ function openCustomerForm(id){
     <label>รหัสบ้านลูกค้า<input name="house" value="${esc(c.house)}" placeholder="BAUAR0xxx_01"></label>
     <label>โทรศัพท์<input name="phone" value="${esc(c.phone)}"></label>
     <label>วันเริ่มนับประกัน<input type="date" name="handoverDate" value="${esc(c.handoverDate)}"></label>
-    <label>วันหมดประกัน (เว้นว่าง = 1 ปี)<input type="date" name="warrantyEnd" value="${esc(c.warrantyEnd)}"></label>
+    <label>วันหมดประกัน (อัตโนมัติ +1 ปี)<input type="date" name="warrantyEnd" value="${esc(c.warrantyEnd)}"></label>
     <label>สถานะ<input name="status" value="${esc(c.status)}" list="status-list" placeholder="Hand Over"><datalist id="status-list"><option value="Hand Over"><option value="HO แล้ว แต่ยังไม่รับงาน"></datalist></label>
     <label>วันส่งมอบ (HO)<input type="date" name="hoDate" value="${esc(c.hoDate)}"></label>
-    <label>วันหมดประกันโครงสร้าง<input type="date" name="structEnd" value="${esc(c.structEnd)}"></label>
+    <label>วันหมดประกันโครงสร้าง (อัตโนมัติ HO +5 ปี)<input type="date" name="structEnd" value="${esc(c.structEnd)}"></label>
     <label style="flex-direction:row;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" name="structNA" ${c.structNA?'checked':''}> ไม่มีงานโครงสร้าง</label>
     <label class="full">ที่อยู่<textarea name="address">${esc(c.address)}</textarea></label>
     <div class="actions full">${id&&can('delete')?`<button type="button" class="btn danger" style="margin-right:auto" onclick="delCustomer('${id}')">ลบลูกค้า</button>`:''}<button type="button" class="btn" onclick="closeAll()">ยกเลิก</button><button class="btn primary">บันทึก</button></div>
   </form>`);
+  const cf=$('#cf'), F=n=>cf.querySelector(`[name=${n}]`);
+  const live=()=>{ const d={hoDate:F('hoDate').value, handoverDate:F('handoverDate').value, warrantyEnd:F('warrantyEnd').value, structEnd:F('structEnd').value, structNA:F('structNA').checked};
+    fillWarranty(d); ['handoverDate','warrantyEnd','structEnd'].forEach(k=>{ if(!F(k).value && d[k]) F(k).value=d[k]; }); F('structEnd').disabled=F('structNA').checked; };
+  F('hoDate').onchange=live; F('handoverDate').onchange=live; F('structNA').onchange=live; F('structEnd').disabled=F('structNA').checked;
   $('#cf').onsubmit=async e=>{ e.preventDefault(); const btn=e.submitter;
     const d=Object.fromEntries(new FormData(e.target)); d.house=normHouse(d.house);
     if(d.house && DB.customers.some(x=>x.id!==id && (x.house||'').toUpperCase()===d.house)) return alert(`รหัสบ้าน ${d.house} มีอยู่แล้ว\nถ้าลูกค้าทำสัญญาใหม่ ให้ใช้เลขถัดไป เช่น _02`);
-    if(d.handoverDate && !d.warrantyEnd) d.warrantyEnd = addDays(d.handoverDate,365);
-    d.structNA = !!d.structNA;
+    d.structNA = !!d.structNA; fillWarranty(d);
     busy(btn,true);
     try{
       if(id) await q(sb.from('customers').update(toCust(d)).eq('id',id), 'บันทึกลูกค้า');
@@ -781,7 +794,7 @@ $('#file-customers').onchange = async e=>{
   const parsed = rows.map(r=>({name:String(r[pick.name]||'').trim(), project:pick.project?String(r[pick.project]).trim():'', house:pick.house?normHouse(r[pick.house]):'', address:pick.address?String(r[pick.address]).trim():'', phone:pick.phone?String(r[pick.phone]).trim():'', handoverDate:pick.handoverDate?normDate(r[pick.handoverDate]):'', warrantyEnd:pick.warrantyEnd?normDate(r[pick.warrantyEnd]):'',
     status:pick.status?String(r[pick.status]).trim():'', hoDate:pick.hoDate?normDate(r[pick.hoDate]):'',
     structEnd:pick.structEnd?normDate(r[pick.structEnd]):'', structNA:pick.structEnd?/ไม่มี/.test(String(r[pick.structEnd])):false})).filter(r=>r.name)
-    .map(r=>({...r, warrantyEnd: r.warrantyEnd || (r.handoverDate ? addDays(r.handoverDate,365) : '')}));
+    .map(r=>fillWarranty({...r}));
   const key = r=> r.house ? 'H|'+r.house.toUpperCase() : 'N|'+r.name.toLowerCase();
   const existing = new Map(DB.customers.map(c=>[key(c),c]));
   const upd = parsed.filter(r=>existing.has(key(r))).length;
