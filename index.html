@@ -513,7 +513,7 @@ function topN(map, n=6){
   const head=arr.slice(0,n-1), rest=arr.slice(n-1).reduce((a,x)=>a+x[1],0);
   return [...head, ['อื่นๆ', rest]];
 }
-function renderOverall(){
+function overallStats(){
   const cs = DB.cases;
   const inW = cs.filter(c=>/^in/i.test(c.warranty)), outW = cs.filter(c=>/^out/i.test(c.warranty));
   const open = cs.filter(isOpen), over = cs.filter(isOverdue);
@@ -526,9 +526,13 @@ function renderOverall(){
   const conItems = topN(count(inW, c=>c.origContractor&&c.origContractor!=='—'?c.origContractor:'ไม่ระบุผู้รับเหมางานเดิม')).map(([label,n],i)=>({label,n,color:SERIES[i]}));
   const MAIN = ['new','assigned','verifycase','progress','closed'];
   const stItems = STATUSES.filter(x=>MAIN.includes(x.key)||inW.some(c=>c.status===x.key)).map((x,i)=>({label:x.label, n:inW.filter(c=>c.status===x.key).length, color:SERIES[i%SERIES.length], suffix:' เคส'}));
+  return {cs,inW,outW,open,over,houses,inClosed,claim,pending,catItems,conItems,stItems};
+}
+function renderOverall(){
+  const {cs,inW,outW,open,over,houses,inClosed,claim,pending,catItems,conItems,stItems} = overallStats();
   const metric = (icon, cls, label, val, sub, onclick) => `<div class="metric" ${onclick?`style="cursor:pointer" onclick="${onclick}"`:''}><div class="metric-icon ${cls}">${icon}</div><span>${label}</span><strong>${val}</strong><small>${sub}</small></div>`;
   const ic = p => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
-  $('#view').innerHTML = `<div class="page-head"><div><div class="eyebrow">${I.pin} ภาพรวมสำหรับผู้บริหาร</div><h1>Overall</h1><p>ภาพรวมเคลมในประกัน แยกหมวดงานและผู้รับเหมางานเดิม</p></div><div class="today">ข้อมูล ณ ${thDateLong()}</div></div>
+  $('#view').innerHTML = `<div class="page-head"><div><div class="eyebrow">${I.pin} ภาพรวมสำหรับผู้บริหาร</div><h1>Overall</h1><p>ภาพรวมเคลมในประกัน แยกหมวดงานและผู้รับเหมางานเดิม</p></div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn" id="btn-pptx" onclick="exportPptx()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg> Export PowerPoint</button><div class="today">ข้อมูล ณ ${thDateLong()}</div></div></div>
   ${pending?`<div class="notice" style="background:var(--orange-soft);color:#8a4a0b;cursor:pointer" onclick="go('dashboard')">⏳ มีคำขอปิดเคสรอ Admin / Manager อนุมัติ <b>${pending}</b> เคส — กดเพื่อดู</div>`:''}
   <section class="metrics">
     ${metric(ic('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>'),'blue','เคสในประกัน',inW.length,'In warranty')}
@@ -544,6 +548,94 @@ function renderOverall(){
     <div class="panel"><div class="panel-title"><h2>สถานะเคส</h2><p>เฉพาะเคส In warranty · แยกตาม Stage ปัจจุบัน</p></div>${donut(stItems,'เคสในประกัน')}</div>
   </section>
   <div class="overall-footnote">นับจำนวนเคสที่เลือก In warranty เท่านั้น · ผู้รับเหมาหมายถึงผู้รับเหมางานเดิมที่บันทึกในเคส ตัวเลขแสดงความถี่ของการเคลม ไม่ใช่ข้อสรุปความรับผิด</div>`;
+}
+
+/* ============ EXPORT POWERPOINT (Template Std · SCG Home Experience) ============ */
+function loadScript(src){ return new Promise((res,rej)=>{ if(document.querySelector(`script[src="${src}"]`)) return res(); const el=document.createElement('script'); el.src=src; el.onload=res; el.onerror=()=>rej(new Error('โหลด '+src+' ไม่สำเร็จ')); document.head.appendChild(el); }); }
+async function exportPptx(){
+  const btn=$('#btn-pptx'); busy(btn,true); if(btn) btn.textContent='กำลังสร้างไฟล์…';
+  try{
+    await loadScript('assets/pptxgen.bundle.js'); await loadScript('assets/brand.js');
+    const B = window.AFS_BRAND, S = overallStats();
+    const RED='C00000', INK='262626', MUTED='6B7280', LINE='E5E7EB', FONT='SCG';
+    const hx = c => c.replace('#','').toUpperCase();
+    const pres = new PptxGenJS();
+    pres.layout='LAYOUT_WIDE'; pres.title='Aftersale Service – Overall'; pres.author=me().name||'Aftersale Service'; pres.company='SCG Home Experience';
+    pres.theme={headFontFace:FONT, bodyFontFace:FONT};
+    const asOf = thDateLong(), monthLabel = new Date().toLocaleDateString('th-TH',{month:'short',year:'numeric'});
+    pres.defineSlideMaster({ title:'AFS_COVER', background:{data:B.cover},
+      objects:[{placeholder:{options:{name:'title',type:'title',x:5.6,y:3.0,w:6.4,h:0.8,fontFace:FONT,fontSize:36,bold:true,color:'1F1F1F',align:'center',valign:'middle'},text:''}},
+               {placeholder:{options:{name:'subtitle',type:'body',x:5.6,y:3.8,w:6.4,h:0.5,fontFace:FONT,fontSize:20,bold:true,color:RED,align:'center',valign:'middle'},text:''}}]});
+    pres.defineSlideMaster({ title:'AFS_CONTENT', background:{color:'FFFFFF'},
+      objects:[{image:{x:10.05,y:5.25,w:3.29,h:2.25,data:B.corner}},{image:{x:12.62,y:0.13,w:0.5,h:0.49,data:B.logo}},
+               {placeholder:{options:{name:'title',type:'title',x:0.12,y:0.03,w:9,h:0.34,fontFace:FONT,fontSize:20,bold:true,color:RED,margin:0,valign:'middle',align:'left'},text:''}},
+               {placeholder:{options:{name:'subtitle',type:'body',x:0.12,y:0.32,w:9,h:0.38,fontFace:FONT,fontSize:16,bold:true,color:INK,margin:0,valign:'middle',align:'left'},text:''}}],
+      slideNumber:{x:12.7,y:7.1,w:0.5,h:0.3,fontFace:FONT,fontSize:9,color:MUTED}});
+    // 1) Cover
+    let sl = pres.addSlide({masterName:'AFS_COVER'});
+    sl.addText('Aftersale Service',{placeholder:'title'});
+    sl.addText('ภาพรวมเคลมในประกัน – '+monthLabel,{placeholder:'subtitle'});
+    // 2) Overall
+    sl = pres.addSlide({masterName:'AFS_CONTENT'});
+    sl.addText('AFTERSALE SERVICE – OVERALL',{placeholder:'title'});
+    sl.addText('ภาพรวมเคลมในประกัน แยกหมวดงานและผู้รับเหมางานเดิม  |  ข้อมูล ณ '+asOf,{placeholder:'subtitle'});
+    const kpis=[['เคสในประกัน',S.inW.length,'In warranty','2A78D6'],['งานนอกประกัน',S.outW.length,'Out of warranty','64748B'],['บ้านที่มีเคลม',S.houses,'หลัง','4A3AA7'],
+      ['กำลังติดตาม',S.open.length,S.over.length+' เคสเกินกำหนด','EB6834'],['ปิดเคสแล้ว',S.inClosed,(S.inW.length?Math.round(S.inClosed/S.inW.length*100):0)+'% ของเคสในประกัน','008300'],['มูลค่างาน Claim',fmtMoney(S.claim),'บาท · เคส In warranty','4A3AA7']];
+    const kw=2.0, kg=0.13, kx0=0.35, ky=0.95;
+    kpis.forEach(([label,val,sub,col],i)=>{ const x=kx0+i*(kw+kg);
+      sl.addShape(pres.shapes.ROUNDED_RECTANGLE,{x,y:ky,w:kw,h:1.15,fill:{color:'FFFFFF'},line:{color:LINE,width:1},rectRadius:0.08,objectName:'kpi-'+i});
+      sl.addShape(pres.shapes.RECTANGLE,{x:x+0.15,y:ky+0.15,w:0.08,h:0.85,fill:{color:col},line:{color:col,width:0}});
+      sl.addText([{text:label,options:{fontSize:11,color:MUTED,breakLine:true}},{text:String(val),options:{fontSize:String(val).length>8?20:26,bold:true,color:INK,breakLine:true}},{text:sub,options:{fontSize:9,color:MUTED}}],
+        {x:x+0.32,y:ky+0.08,w:kw-0.4,h:1.0,fontFace:FONT,valign:'middle',margin:0,isTextBox:true}); });
+    const charts=[['หมวดงานที่เกิดเคลมบ่อย','เฉพาะเคส In warranty · '+S.inW.length+' เคส',S.catItems],['ผู้รับเหมางานเดิมที่ถูกเคลมบ่อย','นับเฉพาะเคส In warranty ตามผู้รับเหมางานเดิม',S.conItems],['สถานะเคส','เฉพาะเคส In warranty · แยกตาม Stage ปัจจุบัน',S.stItems]];
+    const cw=4.1, cg=0.12, cy=2.3;
+    charts.forEach(([t,sub,items],i)=>{ const x=0.35+i*(cw+cg);
+      sl.addShape(pres.shapes.ROUNDED_RECTANGLE,{x,y:cy,w:cw,h:4.45,fill:{color:'FFFFFF'},line:{color:LINE,width:1},rectRadius:0.06});
+      sl.addText([{text:t,options:{fontSize:14,bold:true,color:INK,breakLine:true}},{text:sub,options:{fontSize:9,color:MUTED}}],{x:x+0.2,y:cy+0.1,w:cw-0.4,h:0.6,fontFace:FONT,margin:0,valign:'top',isTextBox:true});
+      const data=items.filter(it=>it.n>0);
+      if(data.length){
+        sl.addChart(pres.charts.DOUGHNUT,[{name:t,labels:data.map(d=>d.label),values:data.map(d=>d.n)}],
+          {x:x+0.15,y:cy+0.7,w:cw-0.3,h:2.25,holeSize:58,chartColors:data.map(d=>hx(d.color)),showLegend:false,showValue:true,showPercent:false,dataLabelColor:'FFFFFF',dataLabelFontSize:10,dataLabelFontFace:'+mn-lt',showTitle:false});
+      } else sl.addText('ยังไม่มีข้อมูล',{x:x+0.2,y:cy+1.5,w:cw-0.4,h:0.5,fontFace:FONT,fontSize:11,color:MUTED,align:'center',isTextBox:true});
+      const rows=items.slice(0,6).map(it=>[{text:'■',options:{color:hx(it.color),fontSize:11}},{text:it.label,options:{color:INK}},{text:String(it.n)+(it.suffix||''),options:{color:INK,bold:true,align:'right'}}]);
+      if(rows.length) sl.addTable(rows,{x:x+0.2,y:cy+3.0,w:cw-0.4,colW:[0.25,cw-1.35,0.7],fontFace:FONT,fontSize:10,rowH:0.24,margin:[0.02,0.04,0.02,0.04],valign:'middle',border:{type:'none'}});
+    });
+    sl.addText('นับจำนวนเคสที่เลือก In warranty เท่านั้น · ผู้รับเหมาหมายถึงผู้รับเหมางานเดิมที่บันทึกในเคส ตัวเลขแสดงความถี่ของการเคลม ไม่ใช่ข้อสรุปความรับผิด',{x:0.35,y:6.85,w:9.6,h:0.3,fontFace:FONT,fontSize:9,color:MUTED,margin:0,isTextBox:true});
+    // 3) รายการเคสที่ยังเปิดอยู่
+    const head=['เลขเคส','รหัสบ้าน / ลูกค้า','เรื่องที่แจ้ง','หมวด','Warranty','งานเดิมโดย','เข้าแก้โดย','ความสำคัญ','SLA เข้าแก้','กำหนดปิด','สถานะ'].map(t=>({text:t,options:{bold:true,color:'FFFFFF',fill:{color:RED}}}));
+    const openList=S.open.slice().sort((a,b)=>(isOverdue(b)-isOverdue(a))||(a.code.localeCompare(b.code)));
+    const body=openList.map(c=>{ const cu=customer(c.customerId); const late=isOverdue(c);
+      return [c.code,(cu.house?cu.house+'\n':'')+cu.name,c.title,catShort(c.category),/^in/i.test(c.warranty)?'In':/^out/i.test(c.warranty)?'Out':'-',c.origContractor||'—',c.fixContractor||'—',pr(c.priority).label,
+        c.visitedAt?'เข้าแก้ '+thDate(c.visitedAt):c.visitDue?'ภายใน '+thDate(c.visitDue):'—', c.dueAt?thDate(c.dueAt):'—', st(c.status).label+(closePending(c)?' (รออนุมัติปิด)':'')]
+        .map((t,i)=>({text:String(t),options:{color:late&&(i===8||i===9)?RED:INK}})); });
+    sl = pres.addSlide({masterName:'AFS_CONTENT'});
+    sl.addText('CASE TRACKING',{placeholder:'title'});
+    sl.addText(`เคสที่กำลังติดตาม ${openList.length} เคส · เกินกำหนด ${S.over.length} เคส  |  ข้อมูล ณ ${asOf}`,{placeholder:'subtitle'});
+    if(body.length){
+      sl.addTable([head,...body],{x:0.35,y:0.9,w:12.6,colW:[1.15,2.0,2.45,0.6,0.75,1.05,1.05,0.75,1.1,0.85,0.85],fontFace:FONT,fontSize:9,valign:'middle',
+        border:{type:'solid',pt:0.5,color:LINE},margin:[0.03,0.05,0.03,0.05],autoPage:true,autoPageRepeatHeader:true,autoPageSlideStartY:0.9,newSlideStartY:0.9,
+        masterName:'AFS_CONTENT'});
+    } else sl.addText('ไม่มีเคสที่ค้างอยู่',{x:0.35,y:1.2,w:6,h:0.5,fontFace:FONT,fontSize:14,color:MUTED,isTextBox:true});
+    // 4) ติดตามผู้รับเหมา
+    const m={}; const add=(n,k)=>{ n=String(n||'').trim(); if(!n||n==='—') return; (m[n] ||= {orig:0,fix:0})[k]++; };
+    DB.cases.forEach(c=>{ add(c.origContractor,'orig'); add(c.fixContractor,'fix'); });
+    const crow=Object.entries(m).sort((a,b)=>(b[1].orig-a[1].orig)||(b[1].fix-a[1].fix));
+    if(crow.length){
+      sl = pres.addSlide({masterName:'AFS_CONTENT'});
+      sl.addText('CONTRACTOR TRACKING',{placeholder:'title'});
+      sl.addText('จำนวนเคสที่พบในงานเดิมเทียบกับจำนวนเคสที่รับเข้าแก้ไข (ไม่ใช่การชี้ความรับผิด)',{placeholder:'subtitle'});
+      sl.addChart(pres.charts.BAR,[{name:'เคสจากงานเดิม',labels:crow.slice().reverse().map(r=>r[0]),values:crow.slice().reverse().map(r=>r[1].orig)},{name:'เคสที่เข้าแก้ไข',labels:crow.slice().reverse().map(r=>r[0]),values:crow.slice().reverse().map(r=>r[1].fix)}],
+        {x:0.35,y:0.95,w:8.2,h:5.9,barDir:'bar',barGrouping:'clustered',chartColors:['2A78D6','EB6834'],showLegend:true,legendPos:'t',legendFontFace:'+mn-lt',legendFontSize:11,
+         showValue:true,dataLabelPosition:'outEnd',dataLabelFontSize:10,dataLabelFontFace:'+mn-lt',catAxisLabelFontFace:'+mn-lt',catAxisLabelFontSize:11,catAxisLabelColor:INK,
+         valAxisHidden:true,valGridLine:{style:'none'},catGridLine:{style:'none'},valAxisMinVal:0});
+      sl.addTable([[{text:'ผู้รับเหมา',options:{bold:true,color:'FFFFFF',fill:{color:RED}}},{text:'งานเดิม',options:{bold:true,color:'FFFFFF',fill:{color:RED},align:'center'}},{text:'เข้าแก้',options:{bold:true,color:'FFFFFF',fill:{color:RED},align:'center'}}],
+        ...crow.map(([n,v])=>[{text:n},{text:String(v.orig),options:{align:'center'}},{text:String(v.fix),options:{align:'center'}}])],
+        {x:8.8,y:0.95,w:3.6,colW:[2.0,0.8,0.8],fontFace:FONT,fontSize:10,color:INK,border:{type:'solid',pt:0.5,color:LINE},margin:[0.03,0.06,0.03,0.06],rowH:0.3});
+    }
+    await pres.writeFile({fileName:`AFS_Overall_${todayISO()}.pptx`});
+    toast('ดาวน์โหลดไฟล์ PowerPoint แล้ว');
+  }catch(err){ console.error(err); alert('Export ไม่สำเร็จ: '+(err.message||err)); }
+  finally{ busy(btn,false); if(btn) btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg> Export PowerPoint'; }
 }
 
 /* ============ PROJECTS ============ */
