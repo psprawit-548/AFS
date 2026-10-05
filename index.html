@@ -651,11 +651,11 @@ function renderUsers(){
   ${admin&&pending?`<div class="notice">มีผู้ใช้ใหม่ ${pending} คนรออนุมัติ — เลือกบทบาทให้ในตารางด้านล่าง</div>`:''}
   <div class="grid-2">
     <div class="panel">
-      <div class="records-head"><div><h3>ผู้ใช้งาน</h3><p class="sub">${DB.users.length} คน · คนใหม่ให้กด “สมัครใช้งาน” ที่หน้าเข้าสู่ระบบ แล้ว Admin อนุมัติที่นี่</p></div><button class="btn sm" onclick="copyLink()">คัดลอกลิงก์แอป</button></div>
+      <div class="records-head"><div><h3>ผู้ใช้งาน</h3><p class="sub">${DB.users.length} คน · Admin เพิ่มผู้ใช้ได้เอง หรือให้สมัครเองที่หน้าเข้าสู่ระบบแล้วอนุมัติที่นี่</p></div><div class="customer-actions">${admin?`<button class="btn sm primary" onclick="openAddUser()">+ เพิ่มผู้ใช้</button>`:''}<button class="btn sm" onclick="copyLink()">คัดลอกลิงก์แอป</button></div></div>
       <div class="table-wrap"><table><thead><tr><th>ชื่อ</th><th>อีเมล</th><th>บทบาท</th><th></th></tr></thead><tbody>
       ${DB.users.map(u=>`<tr style="cursor:default"><td>${esc(u.name)}${u.id===me().id?' <span class="badge b-blue">คุณ</span>':''}</td><td>${esc(u.email||'-')}</td>
       <td>${admin&&u.id!==me().id?`<select class="role-sel" data-uid="${u.id}">${roleOpts(u)}</select>`:(u.role==='pending'?'<span class="badge b-orange">รออนุมัติ</span>':ROLES[u.role].label)}</td>
-      <td style="text-align:right;white-space:nowrap">${admin||u.id===me().id?`<button class="btn sm" onclick="renameUser('${u.id}')">แก้ชื่อ</button>`:''} ${admin&&u.id!==me().id?`<button class="btn sm danger" onclick="delUser('${u.id}')">ลบ</button>`:''}</td></tr>`).join('')}
+      <td style="text-align:right;white-space:nowrap">${admin||u.id===me().id?`<button class="btn sm" onclick="renameUser('${u.id}')">แก้ชื่อ</button>`:''} ${admin&&u.id!==me().id?`<button class="btn sm" onclick="resetPw('${u.id}')">ตั้งรหัสใหม่</button> <button class="btn sm danger" onclick="delUser('${u.id}')">ลบ</button>`:''}</td></tr>`).join('')}
       </tbody></table></div>
     </div>
     <div class="panel">
@@ -684,10 +684,43 @@ async function renameUser(id){
   const u=DB.users.find(x=>x.id===id); const name=prompt('ชื่อที่แสดง', u.name); if(!name) return;
   await q(sb.from('profiles').update({name}).eq('id',id), 'แก้ชื่อ'); scheduleReload();
 }
+// เรียก Edge Function admin-users (ใช้ได้เฉพาะ Admin; ฝั่งเซิร์ฟเวอร์ตรวจสิทธิ์ซ้ำ)
+async function adminUsers(body, what){
+  const {data, error} = await sb.functions.invoke('admin-users', {body});
+  if(error){ let msg=error.message; try{ const j=await error.context.json(); if(j?.error) msg=j.error; }catch(e){}
+    alert(`${what}ไม่สำเร็จ: ${msg}`); throw error; }
+  if(data?.error){ alert(`${what}ไม่สำเร็จ: ${data.error}`); throw new Error(data.error); }
+  return data;
+}
+const genPw = () => { const c='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'; let p=''; const r=crypto.getRandomValues(new Uint32Array(10)); for(const x of r) p+=c[x%c.length]; return p; };
+function openAddUser(){
+  const pw = genPw();
+  modal(`<button class="x" onclick="closeAll()">×</button><h2>เพิ่มผู้ใช้</h2><p class="sub">บัญชีจะใช้งานได้ทันที ส่งอีเมลและรหัสผ่านให้ผู้ใช้ แล้วให้เปลี่ยนรหัสภายหลังได้</p>
+  <form class="form" id="uf">
+    <label class="full">ชื่อที่แสดง *<input name="name" required placeholder="เช่น สมชาย (ช่าง)"></label>
+    <label>อีเมล *<input name="email" type="email" required></label>
+    <label>บทบาท<select name="role">${['admin','manager','cs','tech'].map(k=>`<option value="${k}" ${k==='tech'?'selected':''}>${ROLES[k].label}</option>`).join('')}</select></label>
+    <label class="full">รหัสผ่านเริ่มต้น *<input name="password" required minlength="6" value="${pw}"></label>
+    <div class="actions full"><button type="button" class="btn" onclick="closeAll()">ยกเลิก</button><button class="btn primary">เพิ่มผู้ใช้</button></div>
+  </form>`);
+  $('#uf').onsubmit=async e=>{ e.preventDefault(); const btn=e.submitter; const d=Object.fromEntries(new FormData(e.target));
+    busy(btn,true);
+    try{ await adminUsers({action:'create', ...d}, 'เพิ่มผู้ใช้');
+      modal(`<button class="x" onclick="closeAll()">×</button><h2>เพิ่มผู้ใช้แล้ว ✅</h2><p class="sub">ส่งข้อมูลนี้ให้ ${esc(d.name)} เพื่อเข้าสู่ระบบ</p>
+        <div class="panel" style="margin-top:12px;font-size:14px" id="cred">ลิงก์: ${esc(location.href.split('#')[0])}<br>อีเมล: ${esc(d.email)}<br>รหัสผ่าน: ${esc(d.password)}</div>
+        <div class="actions"><button class="btn" onclick="navigator.clipboard?.writeText($('#cred').innerText).then(()=>toast('คัดลอกแล้ว'))">คัดลอก</button><button class="btn primary" onclick="closeAll()">เสร็จ</button></div>`);
+      scheduleReload();
+    }finally{ busy(btn,false); } };
+}
+async function resetPw(id){
+  const u=DB.users.find(x=>x.id===id); const pw=prompt(`ตั้งรหัสผ่านใหม่ให้ ${u.name} (อย่างน้อย 6 ตัวอักษร)`, genPw()); if(!pw) return;
+  await adminUsers({action:'reset_password', user_id:id, password:pw}, 'ตั้งรหัสใหม่');
+  prompt('ตั้งรหัสใหม่แล้ว คัดลอกส่งให้ผู้ใช้:', pw);
+}
 async function delUser(id){
-  if(!confirm('ลบผู้ใช้นี้ออกจากแอป? (ผู้ใช้จะเข้าใช้งานไม่ได้ ถ้าต้องการลบบัญชีถาวรให้ลบที่ Supabase → Authentication ด้วย)')) return;
-  await q(sb.from('profiles').update({role:'pending'}).eq('id',id), 'ลบผู้ใช้');
-  await q(sb.from('profiles').delete().eq('id',id), 'ลบผู้ใช้'); scheduleReload();
+  const u=DB.users.find(x=>x.id===id);
+  if(!confirm(`ลบบัญชี ${u?.name||''} ออกถาวร? ผู้ใช้จะเข้าระบบไม่ได้อีก (เคสและประวัติที่บันทึกไว้ยังอยู่)`)) return;
+  await adminUsers({action:'delete', user_id:id}, 'ลบผู้ใช้'); toast('ลบผู้ใช้แล้ว'); scheduleReload();
 }
 function backup(){ download('afs-backup-'+todayISO()+'.json', JSON.stringify({exportedAt:new Date().toISOString(), customers:DB.customers, cases:DB.cases.map(c=>({...c, log:logsOf(c.id)}))},null,1), 'application/json'); }
 
