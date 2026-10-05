@@ -365,11 +365,21 @@ function getConfig(){
 }
 async function q(promise, what='ทำรายการ'){
   const {data, error} = await promise;
-  if(error){ console.error(error); alert(`${what}ไม่สำเร็จ: ${error.message}`); throw error; }
+  if(error){ console.error(error);
+    const msg = /customers_house_uniq|duplicate key/i.test(error.message) ? 'รหัสบ้านลูกค้านี้มีอยู่แล้ว กรุณาตรวจสอบ (บ้านที่ทำสัญญาใหม่ให้ใช้ _02, _03 …)' : error.message;
+    alert(`${what}ไม่สำเร็จ: ${msg}`); throw error; }
   return data;
 }
-const fromCust = r => ({id:r.id, name:r.name, project:r.project||'', house:r.house||'', address:r.address||'', phone:r.phone||'', handoverDate:r.handover_date||''});
-const toCust = c => ({name:c.name, project:c.project||'', house:c.house||'', address:c.address||'', phone:c.phone||'', handover_date:c.handoverDate||null});
+const fromCust = r => ({id:r.id, name:r.name, project:r.project||'', house:r.house||'', address:r.address||'', phone:r.phone||'', handoverDate:r.handover_date||'', warrantyEnd:r.warranty_end||''});
+const toCust = c => ({name:c.name, project:c.project||'', house:c.house||'', address:c.address||'', phone:c.phone||'', handover_date:c.handoverDate||null, warranty_end:c.warrantyEnd||null});
+// รูปแบบรหัสบ้าน BAUAR0xxx_01 (สัญญาใหม่ = _02, _03 …)
+function normHouse(h){
+  let v=String(h||'').trim().toUpperCase().replace(/\s+/g,'');
+  if(/^BAUAR\d{4}$/.test(v)) v+='_01';
+  v=v.replace(/^(BAUAR\d{4})_(\d)$/,'$1_0$2');
+  return v;
+}
+const wEndOf = c => c.warrantyEnd || (c.handoverDate ? addDays(c.handoverDate,365) : '');
 const fromCase = r => ({id:r.id, code:r.code, customerId:r.customer_id, title:r.title||'', detail:r.detail||'', location:r.location||'', category:r.category||'อื่นๆ', priority:r.priority, status:r.status, assignee:r.assignee||'', openedAt:r.opened_at, dueAt:r.due_at||'', closedAt:r.closed_at||'', rework:r.rework||0, photos:r.photos||[]});
 
 async function loadAll(){
@@ -468,18 +478,19 @@ function renderOverall(){
 }
 
 /* ============ PROJECTS ============ */
-let projQ = '', projFilter = 'all', projProject = '', projSort = {key:'over', dir:-1};
+let projQ = '', projFilter = 'all', projProject = '', projSort = {key:'house', dir:1};
 const PROJ_COLS = [
-  {key:'name', label:'ชื่อลูกค้า'}, {key:'project', label:'โครงการ'}, {key:'house', label:'บ้านเลขที่'},
-  {key:'phone', label:'โทรศัพท์'}, {key:'total', label:'เคสทั้งหมด', num:1}, {key:'open', label:'กำลังติดตาม', num:1},
-  {key:'over', label:'เกินกำหนด', num:1}, {key:'closed', label:'ปิดแล้ว', num:1}, {key:'warranty', label:'ประกัน'},
+  {key:'house', label:'รหัสบ้านลูกค้า'}, {key:'name', label:'ชื่อลูกค้า'}, {key:'project', label:'โครงการ', opt:1},
+  {key:'phone', label:'โทรศัพท์', opt:1}, {key:'total', label:'เคสทั้งหมด', num:1}, {key:'open', label:'กำลังติดตาม', num:1},
+  {key:'over', label:'เกินกำหนด', num:1}, {key:'closed', label:'ปิดแล้ว', num:1},
+  {key:'wStart', label:'วันเริ่มนับประกัน'}, {key:'wEnd', label:'วันหมดประกัน'},
 ];
 function custRows(){
   const t=todayISO();
   return DB.customers.map(c=>{ const cs=DB.cases.filter(x=>x.customerId===c.id);
-    const wEnd = c.handoverDate ? addDays(c.handoverDate,365) : '';
+    const wEnd = wEndOf(c);
     return {c, name:c.name, project:c.project, house:c.house, phone:c.phone, total:cs.length, closed:cs.filter(x=>!isOpen(x)).length,
-      open:cs.filter(isOpen).length, over:cs.filter(isOverdue).length, wEnd, warranty: wEnd ? (wEnd>=t?1:0) : -1}; });
+      open:cs.filter(isOpen).length, over:cs.filter(isOverdue).length, wStart:c.handoverDate, wEnd, warranty: wEnd ? (wEnd>=t?1:0) : -1}; });
 }
 function renderProjects(){
   const all = custRows();
@@ -494,7 +505,7 @@ function renderProjects(){
       </div>
     </div>
     <div class="toolbar">
-      <input id="proj-q" placeholder="ค้นหาชื่อลูกค้า โครงการ บ้านเลขที่ หรือเบอร์โทร" value="${esc(projQ)}">
+      <input id="proj-q" placeholder="ค้นหารหัสบ้านลูกค้า ชื่อลูกค้า โครงการ หรือเบอร์โทร" value="${esc(projQ)}">
       ${projects.length?`<select id="proj-project"><option value="">ทุกโครงการ</option>${projects.map(p=>`<option ${p===projProject?'selected':''}>${esc(p)}</option>`).join('')}</select>`:''}
     </div>
     <div class="chips">${chips.map(([k,l,n])=>`<button class="chip ${projFilter===k?'on':''}" data-f="${k}">${l} <b>${n}</b></button>`).join('')}<span class="sub" id="proj-count" style="margin-left:auto"></span></div>
@@ -508,24 +519,27 @@ function renderProjects(){
       (!projProject || r.project===projProject) &&
       (!q || [r.name,r.project,r.house,r.phone].join(' ').toLowerCase().includes(q))
     );
+    const cols = PROJ_COLS.filter(c=>!c.opt || all.some(r=>r[c.key]));
     const {key,dir} = projSort; const col = PROJ_COLS.find(c=>c.key===key);
-    rows.sort((a,b)=> (col?.num||key==='warranty' ? (a[key]-b[key]) : String(a[key]||'').localeCompare(String(b[key]||''),'th')) * dir
+    rows.sort((a,b)=> (col?.num ? (a[key]-b[key]) : String(a[key]||'').localeCompare(String(b[key]||''),'th')) * dir
       || b.over-a.over || b.open-a.open || a.name.localeCompare(b.name,'th'));
     $('#proj-count').textContent = `แสดง ${rows.length} จาก ${all.length} บ้าน`;
     const arrow = k => projSort.key===k ? (projSort.dir>0?' ▲':' ▼') : '';
     $('#proj-table').innerHTML = !all.length
       ? '<div class="table-wrap"><div class="empty">ยังไม่มีลูกค้า กด “อัปโหลด Customer Data” หรือ “+ เพิ่มลูกค้า”</div></div>'
-      : `<div class="table-wrap"><table class="cust-table"><thead><tr>${PROJ_COLS.map(c=>`<th data-sort="${c.key}" class="${c.num?'num':''}">${c.label}${arrow(c.key)}</th>`).join('')}</tr></thead><tbody>
-        ${rows.map(r=>`<tr data-cust="${r.c.id}">
-          <td><b>${esc(r.name)}</b></td><td>${esc(r.project||'-')}</td><td>${esc(r.house||'-')}</td><td style="white-space:nowrap">${esc(r.phone||'-')}</td>
-          <td class="num">${r.total}</td><td class="num">${r.open||'<span class="sub">0</span>'}</td>
-          <td class="num">${r.over?`<span class="badge b-red">${r.over}</span>`:'<span class="sub">0</span>'}</td>
-          <td class="num">${r.closed||'<span class="sub">0</span>'}</td>
-          <td style="white-space:nowrap">${r.warranty===1?`<span class="badge b-green">ถึง ${thDate(r.wEnd)}</span>`:r.warranty===0?'<span class="badge b-gray">หมดประกัน</span>':'<span class="sub">-</span>'}</td>
-        </tr>`).join('') || `<tr><td colspan="${PROJ_COLS.length}" class="empty">ไม่พบบ้านที่ตรงกับการค้นหา</td></tr>`}
+      : `<div class="table-wrap"><table class="cust-table"><thead><tr><th class="num">ลำดับ</th>${cols.map(c=>`<th data-sort="${c.key}" class="${c.num?'num':''}">${c.label}${arrow(c.key)}</th>`).join('')}</tr></thead><tbody>
+        ${rows.map((r,i)=>`<tr data-cust="${r.c.id}"><td class="num sub">${i+1}</td>${cols.map(c=>{
+          const v=r[c.key];
+          if(c.key==='house') return `<td class="mono" style="color:var(--ink)">${esc(v||'-')}</td>`;
+          if(c.key==='name') return `<td><b>${esc(v)}</b></td>`;
+          if(c.key==='over') return `<td class="num">${v?`<span class="badge b-red">${v}</span>`:'<span class="sub">0</span>'}</td>`;
+          if(c.num) return `<td class="num">${v||'<span class="sub">0</span>'}</td>`;
+          if(c.key==='wStart') return `<td style="white-space:nowrap">${v?thDate(v):'<span class="sub">-</span>'}</td>`;
+          if(c.key==='wEnd') return `<td style="white-space:nowrap">${v?`<span class="badge ${r.warranty===1?'b-green':'b-gray'}">${thDate(v)}${r.warranty===1?'':' · หมดแล้ว'}</span>`:'<span class="sub">-</span>'}</td>`;
+          return `<td style="white-space:nowrap">${esc(v||'-')}</td>`; }).join('')}</tr>`).join('') || `<tr><td colspan="${cols.length+1}" class="empty">ไม่พบบ้านที่ตรงกับการค้นหา</td></tr>`}
         </tbody></table></div>`;
     document.querySelectorAll('tr[data-cust]').forEach(tr=>tr.onclick=()=>go('projects',{customerId:tr.dataset.cust}));
-    document.querySelectorAll('th[data-sort]').forEach(th=>th.onclick=()=>{ const k=th.dataset.sort; projSort = projSort.key===k ? {key:k, dir:-projSort.dir} : {key:k, dir: PROJ_COLS.find(c=>c.key===k).num||k==='warranty' ? -1 : 1}; draw(); });
+    document.querySelectorAll('th[data-sort]').forEach(th=>th.onclick=()=>{ const k=th.dataset.sort; projSort = projSort.key===k ? {key:k, dir:-projSort.dir} : {key:k, dir: PROJ_COLS.find(c=>c.key===k).num ? -1 : 1}; draw(); });
   };
   $('#proj-q').oninput=e=>{ projQ=e.target.value; draw(); };
   if($('#proj-project')) $('#proj-project').onchange=e=>{ projProject=e.target.value; draw(); };
@@ -546,9 +560,10 @@ function renderProject(){
     </div>
     <div class="info-grid">
       <div><small>โครงการ</small>${esc(c.project||'-')}</div>
-      <div><small>บ้านเลขที่ / แปลง</small>${esc(c.house||'-')}</div>
+      <div><small>รหัสบ้านลูกค้า</small><span class="mono" style="color:var(--ink)">${esc(c.house||'-')}</span></div>
       <div><small>โทรศัพท์</small>${esc(c.phone||'-')}</div>
-      <div><small>วันส่งมอบบ้าน</small>${thDate(c.handoverDate)} ${warrantyBadge(c)}</div>
+      <div><small>วันเริ่มนับประกัน</small>${thDate(c.handoverDate)}</div>
+      <div><small>วันหมดประกัน</small>${thDate(wEndOf(c))} ${warrantyBadge(c)}</div>
       <div style="grid-column:1/-1"><small>ที่อยู่</small>${esc(c.address||'-')}</div>
     </div>
   </div>
@@ -557,9 +572,8 @@ function renderProject(){
   bindRows();
 }
 function warrantyBadge(c){
-  if(!c.handoverDate) return '';
-  const end = addDays(c.handoverDate, 365);
-  return end >= todayISO() ? `<span class="badge b-green">ในประกัน ถึง ${thDate(end)}</span>` : `<span class="badge b-gray">หมดประกัน</span>`;
+  const end = wEndOf(c); if(!end) return '';
+  return end >= todayISO() ? `<span class="badge b-green">ในประกัน</span>` : `<span class="badge b-gray">หมดประกัน</span>`;
 }
 
 /* ============ CASE TABLE ============ */
@@ -701,19 +715,23 @@ function busy(btn, on){ if(!btn) return; btn.disabled=on; if(on){ btn.dataset.t=
 
 /* ============ CUSTOMER FORM / IMPORT ============ */
 function openCustomerForm(id){
-  const c = DB.customers.find(x=>x.id===id) || {name:'',project:'',house:'',address:'',phone:'',handoverDate:''};
+  const c = DB.customers.find(x=>x.id===id) || {name:'',project:'',house:'',address:'',phone:'',handoverDate:'',warrantyEnd:''};
   modal(`<button class="x" onclick="closeAll()">×</button><h2>${id?'แก้ไขข้อมูลลูกค้า':'เพิ่มลูกค้า / บ้าน'}</h2>
   <form class="form" id="cf">
     <label class="full">ชื่อลูกค้า *<input name="name" required value="${esc(c.name)}"></label>
     <label>โครงการ<input name="project" value="${esc(c.project)}"></label>
-    <label>บ้านเลขที่ / แปลง<input name="house" value="${esc(c.house)}"></label>
+    <label>รหัสบ้านลูกค้า<input name="house" value="${esc(c.house)}" placeholder="BAUAR0xxx_01"></label>
     <label>โทรศัพท์<input name="phone" value="${esc(c.phone)}"></label>
-    <label>วันส่งมอบบ้าน<input type="date" name="handoverDate" value="${esc(c.handoverDate)}"></label>
+    <label>วันเริ่มนับประกัน<input type="date" name="handoverDate" value="${esc(c.handoverDate)}"></label>
+    <label>วันหมดประกัน (เว้นว่าง = 1 ปี)<input type="date" name="warrantyEnd" value="${esc(c.warrantyEnd)}"></label>
     <label class="full">ที่อยู่<textarea name="address">${esc(c.address)}</textarea></label>
     <div class="actions full">${id&&can('delete')?`<button type="button" class="btn danger" style="margin-right:auto" onclick="delCustomer('${id}')">ลบลูกค้า</button>`:''}<button type="button" class="btn" onclick="closeAll()">ยกเลิก</button><button class="btn primary">บันทึก</button></div>
   </form>`);
-  $('#cf').onsubmit=async e=>{ e.preventDefault(); const btn=e.submitter; busy(btn,true);
-    const d=Object.fromEntries(new FormData(e.target));
+  $('#cf').onsubmit=async e=>{ e.preventDefault(); const btn=e.submitter;
+    const d=Object.fromEntries(new FormData(e.target)); d.house=normHouse(d.house);
+    if(d.house && DB.customers.some(x=>x.id!==id && (x.house||'').toUpperCase()===d.house)) return alert(`รหัสบ้าน ${d.house} มีอยู่แล้ว\nถ้าลูกค้าทำสัญญาใหม่ ให้ใช้เลขถัดไป เช่น _02`);
+    if(d.handoverDate && !d.warrantyEnd) d.warrantyEnd = addDays(d.handoverDate,365);
+    busy(btn,true);
     try{
       if(id) await q(sb.from('customers').update(toCust(d)).eq('id',id), 'บันทึกลูกค้า');
       else await q(sb.from('customers').insert(toCust(d)), 'เพิ่มลูกค้า');
@@ -725,7 +743,7 @@ async function delCustomer(id){
   if(!confirm(`ลบลูกค้านี้${n?` และเคส ${n} รายการ`:''}?`)) return;
   await q(sb.from('customers').delete().eq('id',id), 'ลบลูกค้า'); closeAll(); go('projects'); scheduleReload();
 }
-const COLMAP = {name:['ชื่อลูกค้า','ชื่อ','ลูกค้า','name','customer','customer name'], project:['โครงการ','project'], house:['บ้านเลขที่','แปลง','บ้านเลขที่/แปลง','house','unit','plot'], address:['ที่อยู่','address'], phone:['โทรศัพท์','เบอร์โทร','โทร','phone','tel','mobile'], handoverDate:['วันส่งมอบ','วันส่งมอบบ้าน','handover','handover date','transfer date']};
+const COLMAP = {name:['ชื่อลูกค้า','ชื่อ','ลูกค้า','name','customer','customer name'], project:['โครงการ','project'], house:['รหัสบ้านลูกค้า','รหัสบ้าน','รหัสลูกค้า','บ้านเลขที่','แปลง','house','unit','plot','code'], address:['ที่อยู่','address'], phone:['โทรศัพท์','เบอร์โทร','โทร','phone','tel','mobile'], handoverDate:['วันเริ่มนับประกัน','วันเริ่มประกัน','วันส่งมอบ','วันส่งมอบบ้าน','handover','handover date','warranty start'], warrantyEnd:['วันหมดประกัน','หมดประกัน','warranty end']};
 function normDate(v){
   if(v==null||v==='') return '';
   if(typeof v==='number'){ const d=new Date(Math.round((v-25569)*864e5)); return d.toISOString().slice(0,10); }
@@ -745,14 +763,15 @@ $('#file-customers').onchange = async e=>{
   if(!rows.length) return alert('ไม่พบข้อมูลในไฟล์');
   const headers = Object.keys(rows[0]); const pick={};
   for(const [field,alts] of Object.entries(COLMAP)) pick[field]=headers.find(h=>alts.includes(String(h).trim().toLowerCase())) || headers.find(h=>alts.some(a=>String(h).toLowerCase().includes(a)));
-  if(!pick.name) return alert('ไม่พบคอลัมน์ชื่อลูกค้า กรุณาตั้งหัวคอลัมน์เป็น “ชื่อลูกค้า”\nหัวคอลัมน์ที่รองรับ: ชื่อลูกค้า, โครงการ, บ้านเลขที่, ที่อยู่, โทรศัพท์, วันส่งมอบ');
-  const parsed = rows.map(r=>({name:String(r[pick.name]||'').trim(), project:pick.project?String(r[pick.project]).trim():'', house:pick.house?String(r[pick.house]).trim():'', address:pick.address?String(r[pick.address]).trim():'', phone:pick.phone?String(r[pick.phone]).trim():'', handoverDate:pick.handoverDate?normDate(r[pick.handoverDate]):''})).filter(r=>r.name);
-  const key = r=>(r.name+'|'+(r.house||'')).toLowerCase();
+  if(!pick.name) return alert('ไม่พบคอลัมน์ชื่อลูกค้า กรุณาตั้งหัวคอลัมน์เป็น “ชื่อลูกค้า”\nหัวคอลัมน์ที่รองรับ: รหัสบ้านลูกค้า, ชื่อลูกค้า, โครงการ, ที่อยู่, โทรศัพท์, วันเริ่มนับประกัน, วันหมดประกัน');
+  const parsed = rows.map(r=>({name:String(r[pick.name]||'').trim(), project:pick.project?String(r[pick.project]).trim():'', house:pick.house?normHouse(r[pick.house]):'', address:pick.address?String(r[pick.address]).trim():'', phone:pick.phone?String(r[pick.phone]).trim():'', handoverDate:pick.handoverDate?normDate(r[pick.handoverDate]):'', warrantyEnd:pick.warrantyEnd?normDate(r[pick.warrantyEnd]):''})).filter(r=>r.name)
+    .map(r=>({...r, warrantyEnd: r.warrantyEnd || (r.handoverDate ? addDays(r.handoverDate,365) : '')}));
+  const key = r=> r.house ? 'H|'+r.house.toUpperCase() : 'N|'+r.name.toLowerCase();
   const existing = new Map(DB.customers.map(c=>[key(c),c]));
   const upd = parsed.filter(r=>existing.has(key(r))).length;
   modal(`<button class="x" onclick="closeAll()">×</button><h2>อัปโหลด Customer Data</h2><p class="sub">${esc(f.name)} · พบ ${parsed.length} รายการ (ใหม่ ${parsed.length-upd} · อัปเดต ${upd})</p>
-  <div class="table-wrap" style="max-height:320px;overflow:auto;margin-top:12px"><table><thead><tr><th>ชื่อลูกค้า</th><th>โครงการ</th><th>บ้านเลขที่</th><th>โทร</th><th>วันส่งมอบ</th></tr></thead><tbody>
-  ${parsed.slice(0,200).map(r=>`<tr style="cursor:default"><td>${esc(r.name)}</td><td>${esc(r.project)}</td><td>${esc(r.house)}</td><td>${esc(r.phone)}</td><td>${thDate(r.handoverDate)}</td></tr>`).join('')}</tbody></table></div>
+  <div class="table-wrap" style="max-height:320px;overflow:auto;margin-top:12px"><table><thead><tr><th>รหัสบ้านลูกค้า</th><th>ชื่อลูกค้า</th><th>โครงการ</th><th>โทร</th><th>เริ่มประกัน</th><th>หมดประกัน</th></tr></thead><tbody>
+  ${parsed.slice(0,300).map(r=>`<tr style="cursor:default"><td class="mono">${esc(r.house)}</td><td>${esc(r.name)}</td><td>${esc(r.project)}</td><td>${esc(r.phone)}</td><td>${thDate(r.handoverDate)}</td><td>${thDate(r.warrantyEnd)}</td></tr>`).join('')}</tbody></table></div>
   <div class="actions"><button class="btn" onclick="closeAll()">ยกเลิก</button><button class="btn primary" id="do-import">นำเข้า</button></div>`);
   $('#do-import').onclick=async()=>{
     busy($('#do-import'),true);
@@ -789,7 +808,7 @@ function openNewCase(customerId){
   if(!DB.customers.length) return toast('กรุณาเพิ่มลูกค้าก่อน');
   modal(`<button class="x" onclick="closeAll()">×</button><h2>เปิดเคสใหม่</h2><p class="sub">แจ้งปัญหาบริการหลังการขาย</p>
   <form class="form" id="nf">
-    <label class="full">ลูกค้า / โครงการ *<select name="customerId" required>${DB.customers.slice().sort((a,b)=>a.name.localeCompare(b.name,'th')).map(c=>`<option value="${c.id}" ${c.id===customerId?'selected':''}>${esc(c.name)}${c.house?' · '+esc(c.house):''}</option>`).join('')}</select></label>
+    <label class="full">ลูกค้า / โครงการ *<select name="customerId" required>${DB.customers.slice().sort((a,b)=>(a.house||'~').localeCompare(b.house||'~')||a.name.localeCompare(b.name,'th')).map(c=>`<option value="${c.id}" ${c.id===customerId?'selected':''}>${c.house?esc(c.house)+' · ':''}${esc(c.name)}</option>`).join('')}</select></label>
     <label class="full">เรื่องที่แจ้ง *<input name="title" required placeholder="เช่น น้ำรั่วซึมใต้ซิงค์ครัว"></label>
     <label>ประเภทปัญหา<select name="category">${CATEGORIES.map(c=>`<option>${c}</option>`).join('')}</select></label>
     <label>Priority<select name="priority">${PRIORITIES.map(p=>`<option value="${p.key}" ${p.key==='normal'?'selected':''}>${p.label} (แก้ภายใน ${p.days} วัน)</option>`).join('')}</select></label>
@@ -930,7 +949,7 @@ function openHandover(customerId){
     $('#print-area').innerHTML = `<h1>ใบส่งมอบงานบริการหลังการขาย</h1><p style="text-align:center;margin:0 0 18px">Aftersale Service · วันที่ ${thDateLong()}</p>
     <table style="width:100%;margin-bottom:14px"><tbody>
       <tr><td style="width:22%"><b>ลูกค้า</b></td><td>${esc(c.name)}</td><td style="width:18%"><b>โทรศัพท์</b></td><td>${esc(c.phone||'-')}</td></tr>
-      <tr><td><b>โครงการ / บ้านเลขที่</b></td><td>${esc([c.project,c.house].filter(Boolean).join(' / ')||'-')}</td><td><b>วันส่งมอบบ้าน</b></td><td>${thDate(c.handoverDate)}</td></tr>
+      <tr><td><b>รหัสบ้านลูกค้า</b></td><td>${esc(c.house||'-')}${c.project?' / '+esc(c.project):''}</td><td><b>ระยะประกัน</b></td><td>${thDate(c.handoverDate)} – ${thDate(wEndOf(c))}</td></tr>
       <tr><td><b>ที่อยู่</b></td><td colspan="3">${esc(c.address||'-')}</td></tr></tbody></table>
     <table style="width:100%"><thead><tr><th>#</th><th>เลขเคส</th><th>รายการแจ้งซ่อม</th><th>ตำแหน่ง</th><th>วันที่แจ้ง</th><th>ผลการแก้ไข</th></tr></thead><tbody>
     ${sel.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.code)}</td><td>${esc(x.title)}${x.detail?'<br><small>'+esc(x.detail)+'</small>':''}</td><td>${esc(x.location||'-')}</td><td>${thDate(x.openedAt)}</td><td>☐ เรียบร้อย &nbsp; ☐ ไม่เรียบร้อย</td></tr>`).join('')}</tbody></table>
