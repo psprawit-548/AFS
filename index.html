@@ -423,15 +423,17 @@ function normHouse(h){
 }
 const addYears = (iso,n) => { const d=new Date(iso+'T00:00:00'); d.setFullYear(d.getFullYear()+n); return localISO(d); };
 const WARRANTY_YEARS = 1, STRUCTURE_YEARS = 5;
-// เติมวันประกันอัตโนมัติ: เริ่มนับ = วัน HO, หมดประกัน = +1 ปี, โครงสร้าง = HO +5 ปี (ถ้ามีงานโครงสร้าง)
+// วันหมดประกัน = วันเริ่ม + N ปี − 1 วัน (เช่น เริ่ม 27 ก.ค. 69 → หมด 26 ก.ค. 70)
+const warrantyEndFrom = (start, years) => addDays(addYears(start, years), -1);
+// เติมวันประกันอัตโนมัติ: เริ่มนับ = วัน HO, หมดประกัน = +1 ปี −1 วัน, โครงสร้าง = HO +5 ปี −1 วัน (ถ้ามีงานโครงสร้าง)
 function fillWarranty(d){
   if(!d.handoverDate && d.hoDate) d.handoverDate = d.hoDate;
-  if(d.handoverDate && !d.warrantyEnd) d.warrantyEnd = addYears(d.handoverDate, WARRANTY_YEARS);
+  if(d.handoverDate && !d.warrantyEnd) d.warrantyEnd = warrantyEndFrom(d.handoverDate, WARRANTY_YEARS);
   const base = d.hoDate || d.handoverDate;
-  if(!d.structNA && !d.structEnd && base) d.structEnd = addYears(base, STRUCTURE_YEARS);
+  if(!d.structNA && !d.structEnd && base) d.structEnd = warrantyEndFrom(base, STRUCTURE_YEARS);
   return d;
 }
-const wEndOf = c => c.warrantyEnd || (c.handoverDate ? addYears(c.handoverDate,WARRANTY_YEARS) : '');
+const wEndOf = c => c.warrantyEnd || (c.handoverDate ? warrantyEndFrom(c.handoverDate,WARRANTY_YEARS) : '');
 const fromCase = r => ({id:r.id, code:r.code, customerId:r.customer_id, title:r.title||'', detail:r.detail||'', location:r.location||'', category:r.category||'อื่นๆ', priority:r.priority, status:r.status, assignee:r.assignee||'', openedAt:r.opened_at, dueAt:r.due_at||'', closedAt:r.closed_at||'', rework:r.rework||0, photos:r.photos||[],
   subcategory:r.subcategory||'', warranty:r.warranty||'', origContractor:r.orig_contractor||'', fixContractor:r.fix_contractor||'', visitDue:r.visit_due||'', visitedAt:r.visited_at||'', closeReqAt:r.close_requested_at||'', closeReqBy:r.close_requested_by||'', closeReqNote:r.close_request_note||'', handover:r.handover||null, claimCost:r.claim_cost==null?'':Number(r.claim_cost)});
 
@@ -1092,10 +1094,10 @@ function openCustomerForm(id){
     <label>รหัสบ้านลูกค้า<input name="house" value="${esc(c.house)}" placeholder="BAUAR0xxx_01"></label>
     <label>โทรศัพท์<input name="phone" value="${esc(c.phone)}"></label>
     <label>วันเริ่มนับประกัน<input type="date" name="handoverDate" value="${esc(c.handoverDate)}"></label>
-    <label>วันหมดประกัน (อัตโนมัติ +1 ปี)<input type="date" name="warrantyEnd" value="${esc(c.warrantyEnd)}"></label>
+    <label>วันหมดประกัน (อัตโนมัติ 1 ปี)<input type="date" name="warrantyEnd" value="${esc(c.warrantyEnd)}"></label>
     <label>สถานะ<input name="status" value="${esc(c.status)}" list="status-list" placeholder="Hand Over"><datalist id="status-list"><option value="Hand Over"><option value="HO แล้ว แต่ยังไม่รับงาน"></datalist></label>
     <label>วันส่งมอบ (HO)<input type="date" name="hoDate" value="${esc(c.hoDate)}"></label>
-    <label>วันหมดประกันโครงสร้าง (อัตโนมัติ HO +5 ปี)<input type="date" name="structEnd" value="${esc(c.structEnd)}"></label>
+    <label>วันหมดประกันโครงสร้าง (อัตโนมัติ 5 ปี)<input type="date" name="structEnd" value="${esc(c.structEnd)}"></label>
     <label style="flex-direction:row;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" name="structNA" ${c.structNA?'checked':''}> ไม่มีงานโครงสร้าง</label>
     <label class="full">ที่อยู่<textarea name="address">${esc(c.address)}</textarea></label>
     <div class="actions full">${id&&can('delete')?`<button type="button" class="btn danger" style="margin-right:auto" onclick="delCustomer('${id}')">ลบลูกค้า</button>`:''}<button type="button" class="btn" onclick="closeAll()">ยกเลิก</button><button class="btn primary">บันทึก</button></div>
