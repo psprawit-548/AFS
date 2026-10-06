@@ -219,6 +219,7 @@ canvas.sig{width:100%;height:150px;border:1.5px dashed #9ca3af;border-radius:10p
 .kpi.st{border-top:4px solid var(--st)}
 .scope-sel{height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:var(--panel);font-weight:500}
 .metric:has(.metric-icon.sel){border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft)}
+.od-table td{vertical-align:top}
 .auth-screen{position:fixed;inset:0;background:var(--bg);z-index:80;display:grid;place-items:center;padding:16px}
 .auth-card{width:min(420px,100%);background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:28px}
 .auth-card .brand{display:flex;gap:12px;align-items:center;margin-bottom:18px}
@@ -437,7 +438,7 @@ function fillWarranty(d){
 }
 const wEndOf = c => c.warrantyEnd || (c.handoverDate ? warrantyEndFrom(c.handoverDate,WARRANTY_YEARS) : '');
 const fromCase = r => ({id:r.id, code:r.code, customerId:r.customer_id, title:r.title||'', detail:r.detail||'', location:r.location||'', category:r.category||'อื่นๆ', priority:r.priority, status:r.status, assignee:r.assignee||'', openedAt:r.opened_at, dueAt:r.due_at||'', closedAt:r.closed_at||'', rework:r.rework||0, photos:r.photos||[],
-  subcategory:r.subcategory||'', warranty:r.warranty||'', origContractor:r.orig_contractor||'', fixContractor:r.fix_contractor||'', visitDue:r.visit_due||'', visitedAt:r.visited_at||'', closeReqAt:r.close_requested_at||'', closeReqBy:r.close_requested_by||'', closeReqNote:r.close_request_note||'', handover:r.handover||null, claimCost:r.claim_cost==null?'':Number(r.claim_cost)});
+  subcategory:r.subcategory||'', warranty:r.warranty||'', origContractor:r.orig_contractor||'', fixContractor:r.fix_contractor||'', visitDue:r.visit_due||'', visitedAt:r.visited_at||'', closeReqAt:r.close_requested_at||'', closeReqBy:r.close_requested_by||'', closeReqNote:r.close_request_note||'', handover:r.handover||null, delayReason:r.delay_reason||'', recoveryPlan:r.recovery_plan||'', planFinish:r.plan_finish||'', delayUpdatedAt:r.delay_updated_at||'', delayUpdatedBy:r.delay_updated_by||'', claimCost:r.claim_cost==null?'':Number(r.claim_cost)});
 
 async function loadAll(){
   const [cu, ca, lg, us] = await Promise.all([
@@ -530,6 +531,54 @@ function topN(map, n=6){
 let overallScope = (()=>{ try{ return localStorage.getItem('afs-overall-scope')||'in'; }catch(e){ return 'in'; } })();
 const SCOPES = { in:{label:'In warranty', th:'เคสในประกัน'}, out:{label:'Out of warranty', th:'เคสนอกประกัน'}, all:{label:'ทุกเคส (In + Out)', th:'เคสทั้งหมด'} };
 function setOverallScope(v){ overallScope=v; try{ localStorage.setItem('afs-overall-scope',v); }catch(e){} renderOverall(); }
+const DELAY_REASONS = ['รออะไหล่ / วัสดุ','รอผู้รับเหมาเข้าหน้างาน','ลูกค้าไม่สะดวกนัดหมาย','รออนุมัติค่าใช้จ่าย / งบประมาณ','รอตรวจสอบหาสาเหตุเพิ่มเติม','ต้องแก้ซ้ำ (Rework)','สภาพอากาศ / ฝนตก','รอประสานงานหลายฝ่าย'];
+const daysBetween = (a,b) => Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/864e5);
+function lateInfo(c){
+  const t=todayISO(), out=[];
+  if(visitLate(c)) out.push({type:'เกิน SLA เข้าแก้', due:c.visitDue, days:daysBetween(c.visitDue,t)});
+  if(closeLate(c)) out.push({type:'เกินกำหนดปิด', due:c.dueAt, days:daysBetween(c.dueAt,t)});
+  return out;
+}
+function overdueTable(list){
+  const rows = list.filter(isOverdue).map(c=>({c, late:lateInfo(c)})).sort((a,b)=>Math.max(...b.late.map(x=>x.days))-Math.max(...a.late.map(x=>x.days)));
+  const missing = rows.filter(r=>!r.c.delayReason||!r.c.planFinish).length;
+  return `<div class="panel" id="overdue-panel" style="margin-top:14px"><div class="records-head" style="margin-bottom:10px"><div><h3>เคสที่เกินกำหนด · สาเหตุและแผนแก้ไข</h3>
+    <p class="sub">${rows.length?`${rows.length} เคส · ${missing?`<span class="overdue">ยังไม่ระบุสาเหตุ/แผน ${missing} เคส</span>`:'ระบุสาเหตุและแผนครบแล้ว'} · กด “ระบุ / แก้ไข” เพื่อบันทึก`:'ไม่มีเคสที่เกินกำหนด 🎉'}</p></div><span class="count">${rows.length}</span></div>
+  ${rows.length?`<div class="table-wrap"><table class="od-table"><thead><tr><th>#</th><th>เคส / บ้าน</th><th>เกินกำหนด</th><th>สาเหตุที่เกินกำหนด</th><th>แผนดำเนินการ</th><th>คาดว่าจะจบ</th><th>ผู้รับผิดชอบ</th><th></th></tr></thead><tbody>
+  ${rows.map(({c,late},i)=>{ const cu=customer(c.customerId); const planLate=c.planFinish && c.planFinish<todayISO(); return `<tr data-case="${c.id}">
+    <td class="sub">${i+1}</td>
+    <td style="min-width:220px"><b>${esc(c.title)}</b><div class="sub">${esc(cu.house||'')} ${esc(cu.name)} · <span class="mono">${esc(c.code)}</span></div><div style="margin-top:3px">${badge(st(c.status))}</div></td>
+    <td style="white-space:nowrap">${late.map(x=>`<div><span class="badge b-red">${x.days} วัน</span> <span class="sub">${x.type}</span><div class="sub">กำหนด ${thDate(x.due)}</div></div>`).join('')}</td>
+    <td style="min-width:180px">${c.delayReason?esc(c.delayReason):'<span class="overdue">ยังไม่ระบุ</span>'}</td>
+    <td style="min-width:200px">${c.recoveryPlan?esc(c.recoveryPlan):'<span class="sub">—</span>'}${c.delayUpdatedAt?`<div class="sub" style="margin-top:3px">อัปเดต ${thDateTime(c.delayUpdatedAt)} · ${esc(c.delayUpdatedBy)}</div>`:''}</td>
+    <td style="white-space:nowrap">${c.planFinish?`<span class="${planLate?'overdue':''}">${thDate(c.planFinish)}</span>${planLate?'<div class="sub overdue">เลยแผนแล้ว</div>':`<div class="sub">อีก ${daysBetween(todayISO(),c.planFinish)} วัน</div>`}`:'<span class="overdue">ยังไม่ระบุ</span>'}</td>
+    <td>${esc(c.assignee||'—')}</td>
+    <td style="text-align:right">${can('edit')?`<button class="btn sm" onclick="event.stopPropagation();openDelayPlan('${c.id}')">ระบุ / แก้ไข</button>`:''}</td></tr>`; }).join('')}
+  </tbody></table></div>`:''}</div>`;
+}
+function openDelayPlan(id){
+  const c=DB.cases.find(x=>x.id===id), cu=customer(c.customerId), late=lateInfo(c);
+  modal(`<button class="x" onclick="closeAll()">×</button><h2>สาเหตุที่เกินกำหนด และแผนแก้ไข</h2>
+  <p class="sub"><span class="mono">${esc(c.code)}</span> · ${esc(c.title)} · ${esc(cu.name)}</p>
+  <div style="margin-top:8px">${late.map(x=>`<span class="badge b-red">${x.type} ${x.days} วัน (กำหนด ${thDate(x.due)})</span>`).join(' ')||'<span class="sub">ตอนนี้ไม่เกินกำหนด</span>'}</div>
+  <form class="form" id="dpf">
+    <label class="full">สาเหตุที่เกินกำหนด *<input name="delayReason" required list="delay-reasons" value="${esc(c.delayReason)}" placeholder="เลือกหรือพิมพ์สาเหตุ"><datalist id="delay-reasons">${DELAY_REASONS.map(r=>`<option value="${esc(r)}">`).join('')}</datalist></label>
+    <label class="full">แผนดำเนินการ *<textarea name="recoveryPlan" required placeholder="เช่น สั่งอะไหล่แล้ว ของเข้า 10 ต.ค. นัดช่างเข้าเปลี่ยน 12 ต.ค.">${esc(c.recoveryPlan)}</textarea></label>
+    <label>คาดว่าจะแล้วเสร็จ *<input type="date" name="planFinish" required value="${c.planFinish}"></label>
+    <label style="flex-direction:row;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" name="setDue" ${c.dueAt?'':'checked'}> ใช้วันนี้เป็น “กำหนดปิด” ใหม่ของเคส</label>
+    <div class="actions full"><button type="button" class="btn" onclick="closeAll()">ยกเลิก</button><button class="btn primary">บันทึก</button></div>
+  </form>`);
+  $('#dpf').onsubmit=async e=>{ e.preventDefault(); const btn=e.submitter; busy(btn,true);
+    const d=Object.fromEntries(new FormData(e.target));
+    try{
+      const patch={delay_reason:d.delayReason.trim(), recovery_plan:d.recoveryPlan.trim(), plan_finish:d.planFinish, delay_updated_at:new Date().toISOString(), delay_updated_by:me().name||me().email};
+      if(d.setDue) patch.due_at=d.planFinish;
+      await q(sb.from('cases').update(patch).eq('id',id), 'บันทึกสาเหตุ/แผน');
+      await addLog(id, `⏰ เกินกำหนด: ${patch.delay_reason} · แผน: ${patch.recovery_plan} · คาดว่าจบ ${thDate(d.planFinish)}${d.setDue?' (ตั้งเป็นกำหนดปิดใหม่)':''}`);
+      closeAll(); toast('บันทึกแล้ว'); await loadAll();
+    }finally{ busy(btn,false); }
+  };
+}
 function overallStats(scope=overallScope){
   const cs = DB.cases;
   const inW = cs.filter(c=>/^in/i.test(c.warranty)), outW = cs.filter(c=>/^out/i.test(c.warranty));
@@ -558,7 +607,7 @@ function renderOverall(){
     ${metric(ic('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>'),'blue'+(scope==='in'?' sel':''),'เคสในประกัน',inW.length,'In warranty',"setOverallScope('in')")}
     ${metric(ic('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9.5 9.5l5 5M14.5 9.5l-5 5"/>'),'slate'+(scope==='out'?' sel':''),'งานนอกประกัน',outW.length,'Out of warranty',"setOverallScope('out')")}
     ${metric(ic('<path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/>'),'indigo','บ้านที่มีเคลม',houses,'หลัง · '+scopeLabel,"go('projects')")}
-    ${metric(ic('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),'amber','กำลังติดตาม',open.length,`${over.length} เคสเกินกำหนด`,"filters.overdue='open';go('dashboard')")}
+    ${metric(ic('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),'amber','กำลังติดตาม',open.length,`${over.length} เคสเกินกำหนด ↓`,"document.getElementById('overdue-panel')?.scrollIntoView({behavior:'smooth'})")}
     ${metric(ic('<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>'),'green','ปิดเคสแล้ว',closed,`${list.length?Math.round(closed/list.length*100):0}% ของ${scopeTh}`)}
     ${metric(ic('<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>'),'indigo','มูลค่างาน Claim',`<span class="metric-money">${fmtMoney(claim)}</span>`,'บาท · '+scopeLabel)}
   </section>
@@ -567,7 +616,9 @@ function renderOverall(){
     <div class="panel"><div class="panel-title"><h2>ผู้รับเหมางานเดิมที่ถูกเคลมบ่อย</h2><p>${scope==='all'?'ทุกเคส':'นับเฉพาะเคส '+scopeLabel} ตามผู้รับเหมางานเดิม</p></div>${donut(conItems,scopeTh)}</div>
     <div class="panel"><div class="panel-title"><h2>สถานะเคส</h2><p>${scope==='all'?'ทุกเคส':'เฉพาะเคส '+scopeLabel} · แยกตาม Stage ปัจจุบัน</p></div>${donut(stItems,scopeTh)}</div>
   </section>
+  ${overdueTable(list)}
   <div class="overall-footnote">${scope==='all'?'นับทุกเคส (In + Out warranty)':'นับจำนวนเคสที่เลือก '+scopeLabel+' เท่านั้น'} · การ์ด "บ้านที่มีเคลม" ถึง "มูลค่างาน Claim" และกราฟทั้ง 3 คำนวณตามตัวเลือกด้านบน · ผู้รับเหมาหมายถึงผู้รับเหมางานเดิมที่บันทึกในเคส ตัวเลขแสดงความถี่ของการเคลม ไม่ใช่ข้อสรุปความรับผิด</div>`;
+  bindRows();
 }
 
 /* ============ EXPORT POWERPOINT (Template Std · SCG Home Experience) ============ */
@@ -637,6 +688,23 @@ async function exportPptx(){
         border:{type:'solid',pt:0.5,color:LINE},margin:[0.03,0.05,0.03,0.05],autoPage:true,autoPageRepeatHeader:true,autoPageSlideStartY:0.9,newSlideStartY:0.9,
         masterName:'AFS_CONTENT'});
     } else sl.addText('ไม่มีเคสที่ค้างอยู่',{x:0.35,y:1.2,w:6,h:0.5,fontFace:FONT,fontSize:14,color:MUTED,isTextBox:true});
+    // 3.5) เคสเกินกำหนด + สาเหตุ/แผน
+    const odl = S.list.filter(isOverdue);
+    if(odl.length){
+      sl = pres.addSlide({masterName:'AFS_CONTENT'});
+      sl.addText('OVERDUE CASES – สาเหตุและแผนแก้ไข',{placeholder:'title'});
+      sl.addText(`${odl.length} เคสเกินกำหนด · ${S.scopeLabel}  |  ข้อมูล ณ ${asOf}`,{placeholder:'subtitle'});
+      const oh=['เคส / บ้าน','เกินกำหนด','สาเหตุที่เกินกำหนด','แผนดำเนินการ','คาดว่าจะจบ','ผู้รับผิดชอบ'].map(t=>({text:t,options:{bold:true,color:'FFFFFF',fill:{color:RED}}}));
+      const ob=odl.map(c=>{ const cu=customer(c.customerId); const lt=lateInfo(c);
+        return [ {text:`${c.code}\n${c.title}\n${cu.house||''} ${cu.name}`},
+          {text:lt.map(x=>`${x.days} วัน (${x.type})`).join('\n'),options:{color:RED}},
+          {text:c.delayReason||'ยังไม่ระบุ',options:{color:c.delayReason?INK:RED}},
+          {text:c.recoveryPlan||'—'},
+          {text:c.planFinish?thDate(c.planFinish):'ยังไม่ระบุ',options:{color:c.planFinish&&c.planFinish>=todayISO()?INK:RED}},
+          {text:c.assignee||'—'} ]; });
+      sl.addTable([oh,...ob],{x:0.35,y:0.9,w:12.6,colW:[3.1,1.7,2.4,3.2,1.1,1.1],fontFace:FONT,fontSize:9,color:INK,valign:'top',
+        border:{type:'solid',pt:0.5,color:LINE},margin:[0.03,0.05,0.03,0.05],autoPage:true,autoPageRepeatHeader:true,autoPageSlideStartY:0.9,newSlideStartY:0.9,masterName:'AFS_CONTENT'});
+    }
     // 4) ติดตามผู้รับเหมา
     const m={}; const add=(n,k)=>{ n=String(n||'').trim(); if(!n||n==='—') return; (m[n] ||= {orig:0,fix:0})[k]++; };
     DB.cases.forEach(c=>{ add(c.origContractor,'orig'); add(c.fixContractor,'fix'); });
@@ -1266,6 +1334,9 @@ async function openCase(id, silent){
     ${c.closedAt?`<div><small>วันที่ปิดเคส</small>${thDate(c.closedAt)}</div>`:''}
   </div>
   ${c.rework>MAX_REWORK?`<div class="notice" style="background:var(--red-soft);color:var(--red);margin-top:12px">Rework เกิน ${MAX_REWORK} รอบ ควรแจ้ง Manager</div>`:''}
+  ${isOverdue(c)||c.delayReason?`<div class="notice" style="background:var(--red-soft);color:#7f1d1d;margin-top:12px">⏰ <b>${lateInfo(c).map(x=>x.type+' '+x.days+' วัน').join(' · ')||'เคยเกินกำหนด'}</b>
+    <div style="margin-top:4px">สาเหตุ: ${c.delayReason?esc(c.delayReason):'<i>ยังไม่ระบุ</i>'}${c.recoveryPlan?'<br>แผน: '+esc(c.recoveryPlan):''}${c.planFinish?'<br>คาดว่าจะจบ: '+thDate(c.planFinish):''}</div>
+    ${can('edit')?`<div style="margin-top:8px"><button class="btn sm" onclick="openDelayPlan('${c.id}')">ระบุสาเหตุ / แผน</button></div>`:''}</div>`:''}
   ${closeBox(c)}
   <form class="form" id="ef">
     <label>สถานะ<select name="status" ${ed?'':'disabled'}>${statusOpts.map(s=>`<option value="${s.key}" ${c.status===s.key?'selected':''}>${s.label}</option>`).join('')}</select></label>
