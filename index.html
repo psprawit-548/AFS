@@ -220,6 +220,14 @@ canvas.sig{width:100%;height:150px;border:1.5px dashed #9ca3af;border-radius:10p
 .scope-sel{height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:var(--panel);font-weight:500}
 .metric:has(.metric-icon.sel){border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft)}
 .od-table td{vertical-align:top}
+.date-bar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;box-shadow:var(--shadow)}
+.date-bar-label{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px;color:var(--primary)}
+.date-bar label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.date-bar input[type=date]{height:34px;border:1px solid var(--line);border-radius:8px;padding:0 8px;background:#fff;color:var(--ink)}
+.date-bar .presets{display:flex;gap:6px;flex-wrap:wrap}
+.date-bar .chip{padding:4px 10px}
+.date-bar-now{margin-left:auto;font-size:13px;color:var(--muted)}
+.date-bar-now.on{color:var(--primary);font-weight:600}
 .auth-screen{position:fixed;inset:0;background:var(--bg);z-index:80;display:grid;place-items:center;padding:16px}
 .auth-card{width:min(420px,100%);background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:28px}
 .auth-card .brand{display:flex;gap:12px;align-items:center;margin-bottom:18px}
@@ -531,6 +539,37 @@ function topN(map, n=6){
 let overallScope = (()=>{ try{ return localStorage.getItem('afs-overall-scope')||'in'; }catch(e){ return 'in'; } })();
 const SCOPES = { in:{label:'In warranty', th:'เคสในประกัน'}, out:{label:'Out of warranty', th:'เคสนอกประกัน'}, all:{label:'ทุกเคส (In + Out)', th:'เคสทั้งหมด'} };
 function setOverallScope(v){ overallScope=v; try{ localStorage.setItem('afs-overall-scope',v); }catch(e){} renderOverall(); }
+/* ---------- ช่วงวันที่ (อิงวันที่ได้รับแจ้งเคส = opened_at) ใช้ร่วมกันทั้ง Overall / Dashboard / Export ---------- */
+let dateRange = (()=>{ try{ return JSON.parse(localStorage.getItem('afs-date-range')||'null')||{from:'',to:''}; }catch(e){ return {from:'',to:''}; } })();
+const inRange = c => (!dateRange.from || (c.openedAt||'') >= dateRange.from) && (!dateRange.to || (c.openedAt||'') <= dateRange.to);
+const rangedCases = () => DB.cases.filter(inRange);
+const rangeLabel = () => !dateRange.from && !dateRange.to ? 'ทุกช่วงเวลา' : `${dateRange.from?thDate(dateRange.from):'เริ่มต้น'} – ${dateRange.to?thDate(dateRange.to):'ปัจจุบัน'}`;
+function setDateRange(from, to){
+  if(from && to && from>to) [from,to]=[to,from];
+  dateRange={from:from||'', to:to||''}; try{ localStorage.setItem('afs-date-range', JSON.stringify(dateRange)); }catch(e){}
+  render();
+}
+function datePreset(k){
+  const t=new Date(), y=t.getFullYear(), m=t.getMonth(), iso=d=>localISO(d);
+  const P={ thisMonth:[new Date(y,m,1), new Date(y,m+1,0)], lastMonth:[new Date(y,m-1,1), new Date(y,m,0)],
+    last30:[new Date(y,m,t.getDate()-29), t], thisQuarter:[new Date(y,Math.floor(m/3)*3,1), new Date(y,Math.floor(m/3)*3+3,0)], thisYear:[new Date(y,0,1), new Date(y,11,31)] };
+  if(k==='all') return setDateRange('','');
+  const [a,b]=P[k]; setDateRange(iso(a), iso(b));
+}
+function dateBar(){
+  const active = dateRange.from||dateRange.to;
+  return `<div class="date-bar">
+    <span class="date-bar-label">${I.pin} วันที่ได้รับแจ้งเคส</span>
+    <label>ตั้งแต่<input type="date" id="dr-from" value="${dateRange.from}" max="${dateRange.to||''}"></label>
+    <label>ถึง<input type="date" id="dr-to" value="${dateRange.to}" min="${dateRange.from||''}"></label>
+    <div class="presets">${[['thisMonth','เดือนนี้'],['lastMonth','เดือนที่แล้ว'],['last30','30 วันล่าสุด'],['thisQuarter','ไตรมาสนี้'],['thisYear','ปีนี้'],['all','ทั้งหมด']].map(([k,l])=>`<button class="chip" onclick="datePreset('${k}')">${l}</button>`).join('')}</div>
+    <span class="date-bar-now ${active?'on':''}">${active?'กำลังดู: ':''}${rangeLabel()}</span>
+  </div>`;
+}
+function bindDateBar(){
+  const f=$('#dr-from'), t=$('#dr-to'); if(!f) return;
+  f.onchange=()=>setDateRange(f.value, t.value); t.onchange=()=>setDateRange(f.value, t.value);
+}
 const DELAY_REASONS = ['รออะไหล่ / วัสดุ','รอผู้รับเหมาเข้าหน้างาน','ลูกค้าไม่สะดวกนัดหมาย','รออนุมัติค่าใช้จ่าย / งบประมาณ','รอตรวจสอบหาสาเหตุเพิ่มเติม','ต้องแก้ซ้ำ (Rework)','สภาพอากาศ / ฝนตก','รอประสานงานหลายฝ่าย'];
 const daysBetween = (a,b) => Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/864e5);
 function lateInfo(c){
@@ -580,7 +619,7 @@ function openDelayPlan(id){
   };
 }
 function overallStats(scope=overallScope){
-  const cs = DB.cases;
+  const cs = rangedCases();
   const inW = cs.filter(c=>/^in/i.test(c.warranty)), outW = cs.filter(c=>/^out/i.test(c.warranty));
   const list = scope==='in'?inW : scope==='out'?outW : cs;
   const open = list.filter(isOpen), over = list.filter(isOverdue);
@@ -602,6 +641,7 @@ function renderOverall(){
   const metric = (icon, cls, label, val, sub, onclick) => `<div class="metric" ${onclick?`style="cursor:pointer" onclick="${onclick}"`:''}><div class="metric-icon ${cls}">${icon}</div><span>${label}</span><strong>${val}</strong><small>${sub}</small></div>`;
   const ic = p => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
   $('#view').innerHTML = `<div class="page-head"><div><div class="eyebrow">${I.pin} ภาพรวมสำหรับผู้บริหาร</div><h1>Overall</h1><p>ภาพรวมเคลม ${scope==='in'?'ในประกัน':scope==='out'?'นอกประกัน':'ทั้งหมด'} แยกหมวดงานและผู้รับเหมางานเดิม</p></div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><select id="scope-sel" class="scope-sel" onchange="setOverallScope(this.value)" aria-label="เลือกประเภทประกัน">${Object.entries(SCOPES).map(([k,v])=>`<option value="${k}" ${k===scope?'selected':''}>${v.label}</option>`).join('')}</select><button class="btn" id="btn-pptx" onclick="exportPptx()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg> Export PowerPoint</button><div class="today">ข้อมูล ณ ${thDateLong()}</div></div></div>
+  ${dateBar()}
   ${pending?`<div class="notice" style="background:var(--orange-soft);color:#8a4a0b;cursor:pointer" onclick="go('dashboard')">⏳ มีคำขอปิดเคสรอ Admin / Manager อนุมัติ <b>${pending}</b> เคส — กดเพื่อดู</div>`:''}
   <section class="metrics">
     ${metric(ic('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>'),'blue'+(scope==='in'?' sel':''),'เคสในประกัน',inW.length,'In warranty',"setOverallScope('in')")}
@@ -618,6 +658,7 @@ function renderOverall(){
   </section>
   ${overdueTable(list)}
   <div class="overall-footnote">${scope==='all'?'นับทุกเคส (In + Out warranty)':'นับจำนวนเคสที่เลือก '+scopeLabel+' เท่านั้น'} · การ์ด "บ้านที่มีเคลม" ถึง "มูลค่างาน Claim" และกราฟทั้ง 3 คำนวณตามตัวเลือกด้านบน · ผู้รับเหมาหมายถึงผู้รับเหมางานเดิมที่บันทึกในเคส ตัวเลขแสดงความถี่ของการเคลม ไม่ใช่ข้อสรุปความรับผิด</div>`;
+  bindDateBar();
   bindRows();
 }
 
@@ -646,11 +687,11 @@ async function exportPptx(){
     // 1) Cover
     let sl = pres.addSlide({masterName:'AFS_COVER'});
     sl.addText('Aftersale Service',{placeholder:'title'});
-    sl.addText('ภาพรวมเคลม '+S.scopeLabel+' – '+monthLabel,{placeholder:'subtitle'});
+    sl.addText('ภาพรวมเคลม '+S.scopeLabel+' – '+(dateRange.from||dateRange.to?rangeLabel():monthLabel),{placeholder:'subtitle'});
     // 2) Overall
     sl = pres.addSlide({masterName:'AFS_CONTENT'});
     sl.addText('AFTERSALE SERVICE – OVERALL',{placeholder:'title'});
-    sl.addText(S.scopeLabel+' · แยกหมวดงานและผู้รับเหมางานเดิม  |  ข้อมูล ณ '+asOf,{placeholder:'subtitle'});
+    sl.addText(S.scopeLabel+' · แจ้งช่วง '+rangeLabel()+'  |  ข้อมูล ณ '+asOf,{placeholder:'subtitle'});
     const kpis=[['เคสในประกัน',S.inW.length,'In warranty','2A78D6'],['งานนอกประกัน',S.outW.length,'Out of warranty','64748B'],['บ้านที่มีเคลม',S.houses,'หลัง · '+S.scopeLabel,'4A3AA7'],
       ['กำลังติดตาม',S.open.length,S.over.length+' เคสเกินกำหนด','EB6834'],['ปิดเคสแล้ว',S.closed,(S.list.length?Math.round(S.closed/S.list.length*100):0)+'% ของ'+S.scopeTh,'008300'],['มูลค่างาน Claim',fmtMoney(S.claim),'บาท · '+S.scopeLabel,'4A3AA7']];
     const kw=2.0, kg=0.13, kx0=0.35, ky=0.95;
@@ -707,7 +748,7 @@ async function exportPptx(){
     }
     // 4) ติดตามผู้รับเหมา
     const m={}; const add=(n,k)=>{ n=String(n||'').trim(); if(!n||n==='—') return; (m[n] ||= {orig:0,fix:0})[k]++; };
-    DB.cases.forEach(c=>{ add(c.origContractor,'orig'); add(c.fixContractor,'fix'); });
+    rangedCases().forEach(c=>{ add(c.origContractor,'orig'); add(c.fixContractor,'fix'); });
     const crow=Object.entries(m).sort((a,b)=>(b[1].orig-a[1].orig)||(b[1].fix-a[1].fix));
     if(crow.length){
       sl = pres.addSlide({masterName:'AFS_CONTENT'});
@@ -852,8 +893,9 @@ function bindRows(){ document.querySelectorAll('tr[data-case]').forEach(r=>r.onc
 /* ============ DASHBOARD ============ */
 function renderDashboard(){
   const f = filters;
-  $('#view').innerHTML = head('ทุกเคส','Dashboard · ทุกเคส','ค้นหา กรอง และอัปเดตสถานะเคสทั้งหมด') + `
-  <div class="kpis">${STATUSES.filter(s=>['new','assigned','verifycase','progress','closed'].includes(s.key)||DB.cases.some(c=>c.status===s.key)).map(s=>`<div class="kpi st" style="cursor:pointer;--st:${s.color}" onclick="filters.status='${s.key}';renderDashboard()"><small>${s.label}</small><b>${DB.cases.filter(c=>c.status===s.key).length}</b></div>`).join('')}</div>
+  const RC = rangedCases();
+  $('#view').innerHTML = head('ทุกเคส','Dashboard · ทุกเคส','ค้นหา กรอง และอัปเดตสถานะเคสทั้งหมด') + dateBar() + `
+  <div class="kpis">${STATUSES.filter(s=>['new','assigned','verifycase','progress','closed'].includes(s.key)||RC.some(c=>c.status===s.key)).map(s=>`<div class="kpi st" style="cursor:pointer;--st:${s.color}" onclick="filters.status='${s.key}';renderDashboard()"><small>${s.label}</small><b>${RC.filter(c=>c.status===s.key).length}</b></div>`).join('')}</div>
   ${closeRequestPanel()}
   ${contractorPanel()}
   <div class="toolbar">
@@ -867,13 +909,14 @@ function renderDashboard(){
   <div id="case-list"></div>`;
   const apply = () => {
     const q=f.q.toLowerCase();
-    const list = DB.cases.filter(c=>
+    const list = RC.filter(c=>
       (!f.status||c.status===f.status)&&(!f.priority||c.priority===f.priority)&&(!f.category||c.category===f.category)&&
       (!f.overdue||(f.overdue==='open'?isOpen(c):isOverdue(c)))&&
       (!q||[c.code,c.title,c.detail,c.assignee,c.origContractor,c.fixContractor,c.subcategory,customer(c.customerId).name,customer(c.customerId).house].join(' ').toLowerCase().includes(q))
     ).sort((a,b)=>(b.openedAt||'').localeCompare(a.openedAt||'')||b.code.localeCompare(a.code));
-    $('#case-list').innerHTML = `<p class="sub" style="margin:0 0 8px">${list.length} เคส</p>` + caseTable(list); bindRows();
+    $('#case-list').innerHTML = `<p class="sub" style="margin:0 0 8px">${list.length} เคส${dateRange.from||dateRange.to?' · แจ้งช่วง '+rangeLabel():''}</p>` + caseTable(list); bindRows();
   };
+  bindDateBar();
   ['q','status','priority','category','overdue'].forEach(k=>$('#f-'+k)[k==='q'?'oninput':'onchange']=e=>{f[k]=e.target.value;apply();});
   apply();
 }
@@ -1026,7 +1069,7 @@ async function closeCase(id){
 }
 function contractorPanel(){
   const m={}; const add=(n,k)=>{ n=String(n||'').trim(); if(!n||n==='—') return; (m[n] ||= {orig:0,fix:0})[k]++; };
-  DB.cases.forEach(c=>{ add(c.origContractor,'orig'); add(c.fixContractor,'fix'); });
+  rangedCases().forEach(c=>{ add(c.origContractor,'orig'); add(c.fixContractor,'fix'); });
   const rows=Object.entries(m).sort((a,b)=>(b[1].orig-a[1].orig)||(b[1].fix-a[1].fix)||a[0].localeCompare(b[0],'th'));
   if(!rows.length) return '';
   return `<div class="panel" style="margin-bottom:14px"><div class="records-head" style="margin-bottom:8px"><div><h3>ติดตามผู้รับเหมา</h3><p class="sub">จำนวนเคสที่พบในงานเดิมเทียบกับจำนวนเคสที่รับเข้าแก้ไข ตัวเลขนี้ยังไม่ใช่การชี้ความรับผิด</p></div><span class="count">${rows.length} ราย</span></div>
@@ -1035,7 +1078,7 @@ function contractorPanel(){
 }
 function exportCSV(){
   const rows=[['เลขเคส','รหัสบ้าน','ลูกค้า','เรื่อง','รายละเอียด','ตำแหน่ง','ประเภท','ประเภทย่อย','Warranty','งานเดิมโดย','เข้าแก้โดย','ความสำคัญ','สถานะ','ผู้รับผิดชอบ','เปิดเคส','SLA เข้าแก้','เข้าแก้จริง','กำหนดปิด','ปิดเคส','Rework','มูลค่างาน Claim']];
-  DB.cases.forEach(c=>{ const cu=customer(c.customerId); rows.push([c.code,cu.house,cu.name,c.title,c.detail,c.location,c.category,c.subcategory,c.warranty,c.origContractor,c.fixContractor,pr(c.priority).label,st(c.status).label,c.assignee,c.openedAt,c.visitDue,c.visitedAt,c.dueAt,c.closedAt,c.rework,c.claimCost]); });
+  rangedCases().forEach(c=>{ const cu=customer(c.customerId); rows.push([c.code,cu.house,cu.name,c.title,c.detail,c.location,c.category,c.subcategory,c.warranty,c.origContractor,c.fixContractor,pr(c.priority).label,st(c.status).label,c.assignee,c.openedAt,c.visitDue,c.visitedAt,c.dueAt,c.closedAt,c.rework,c.claimCost]); });
   download('afs-cases-'+todayISO()+'.csv', '﻿'+rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n'), 'text/csv');
 }
 function download(name, data, type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type})); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
