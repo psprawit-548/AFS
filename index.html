@@ -154,7 +154,27 @@ tbody tr:last-child td{border-bottom:0}
 @media print{
   body{background:#fff}
   .shell,.overlay,.modal,.drawer,.toast{display:none!important}
-  #print-area{display:block;font-size:13px;color:#000}
+  #print-area{display:block;font-size:12px;color:#000}
+  @page{size:A4 portrait;margin:8mm 10mm}
+  .hf-page{font-family:"IBM Plex Sans Thai",Tahoma,sans-serif}
+  .hf{height:136mm;display:flex;flex-direction:column;gap:5px;overflow:hidden}
+  .hf-cut{border-top:1px dashed #999;margin:3mm 0}
+  .hf-top{display:flex;justify-content:space-between;gap:10px}
+  .hf-left{width:50%} .hf-logo{height:34px;display:block;margin:2px 0 8px} .hf-logo-t{font-size:26px;font-weight:700;color:#0b2a40}
+  .hf-title{border:1.5px solid #000;padding:5px 10px;text-align:center;font-weight:700;font-size:14px;width:88%}
+  .hf-meta{width:48%} .hf-meta table{border:0!important;width:100%} .hf-meta th,.hf-meta td{border:0!important;padding:1px 4px!important;text-align:left;font-size:11.5px}
+  .hf-meta th{width:38%}
+  .hf-copy{background:#FFFF00!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;text-align:center;font-weight:700;width:60%;margin-left:auto;padding:2px 0}
+  .hf-parties{display:flex;gap:10px;font-size:11.5px;line-height:1.45} .hf-parties>div{width:50%}
+  .hf-items{width:100%;border-collapse:collapse;border:1.5px solid #000!important;font-size:11.5px}
+  .hf-items th{background:#fff!important;border:1px solid #000!important;padding:2px 4px;text-align:center}
+  .hf-items td{border-left:1px solid #000!important;border-right:1px solid #000!important;border-top:0!important;border-bottom:0!important;padding:2px 4px;height:16px;vertical-align:top}
+  .hf-items td.c{text-align:center}
+  .hf-note{font-size:11px;margin-top:2px}
+  .hf-sigs{display:flex;justify-content:space-around;margin-top:auto;text-align:center;font-size:11.5px}
+  .hf-sig{width:45%} .hf-sig .t{font-weight:700} .hf-sig .s{font-size:11px}
+  .hf-sig .img{height:44px;display:flex;align-items:flex-end;justify-content:center} .hf-sig .img img{max-height:44px;max-width:80%}
+  .hf-sig .line{border-top:1px dotted #000;margin:0 10% 0;padding-top:2px}
   #print-area h1{font-size:20px;text-align:center;margin:0 0 4px}
   #print-area table{border:1px solid #000}
   #print-area th,#print-area td{border:1px solid #000;color:#000;background:#fff}
@@ -984,14 +1004,23 @@ function openSignHandover(id, mode){
     <div class="sub" style="margin-top:6px">เปิดเคส ${thDate(c.openedAt)}${c.visitedAt?' · เข้าแก้ '+thDate(c.visitedAt):''}${c.fixContractor?' · เข้าแก้โดย '+esc(c.fixContractor):''}</div>
   </div>
   <form class="form" id="hof" style="margin-top:12px">
-    <label class="full">ผลการแก้ไข / สรุปงานที่ทำ<textarea name="workSummary" placeholder="เช่น เปลี่ยนท่อ PPR ช่วงที่รั่ว ทดสอบแรงดันน้ำแล้วไม่รั่วซึม">${esc(ho.workSummary||c.closeReqNote||'')}</textarea></label>
+    <label>Case Number (เลขที่ใบส่งมอบ)<input name="docNo" value="${esc(ho.docNo||afterSalesNo(c))}"></label>
+    <label>Date / วันที่<input type="date" name="docDate" value="${esc(ho.docDate||todayISO())}"></label>
+    <label>Ref Quotation<input name="refQuotation" value="${esc(ho.refQuotation||'-')}"></label>
+    <label>Ref Receipt<input name="refReceipt" value="${esc(ho.refReceipt||'-')}"></label>
+    <label>Tax ID ลูกค้า<input name="taxId" value="${esc(ho.taxId||'-')}"></label>
+    <label>Customer ID<input value="${esc(cu.house||'-')}" disabled></label>
+    <label class="full">ที่อยู่ลูกค้า (TO/ถึง)<textarea name="address" rows="2" placeholder="บ้านเลขที่ ถนน ตำบล อำเภอ จังหวัด รหัสไปรษณีย์">${esc(ho.address||cu.address||'')}</textarea></label>
+    <label class="full">รายการ (1 บรรทัด = 1 รายการ · จำนวน 1 / หน่วย Job)<textarea name="items" rows="3">${esc((ho.items||[c.title]).join('\n'))}</textarea></label>
+    <label class="full">หมายเหตุ / คำแนะนำบริการ<input name="advice" value="${esc(ho.advice||'')}" placeholder="เช่น หลีกเลี่ยงการใช้น้ำยาแรงทำความสะอาด 7 วัน"></label>
+    <label class="full">ผลการแก้ไข / สรุปงานที่ทำ (เก็บในเคส)<textarea name="workSummary" placeholder="เช่น เปลี่ยนท่อ PPR ช่วงที่รั่ว ทดสอบแรงดันน้ำแล้วไม่รั่วซึม">${esc(ho.workSummary||c.closeReqNote||'')}</textarea></label>
     <label class="full" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="accepted" ${ho.accepted===false?'':'checked'}> ลูกค้าตรวจสอบงานแล้ว และยอมรับการส่งมอบงาน</label>
     <label class="full">หมายเหตุจากลูกค้า (ถ้ามี)<input name="customerRemark" value="${esc(ho.customerRemark||'')}"></label>
-    <label>ชื่อผู้รับมอบงาน (ลูกค้า) *<input name="customerName" required value="${esc(ho.customerName||cu.name||'')}"></label>
-    <label>ชื่อเจ้าหน้าที่ผู้ส่งมอบ *<input name="staffName" required value="${esc(ho.staffName||me().name||'')}"></label>
+    <label>ชื่อผู้รับบริการ (ลูกค้า) *<input name="customerName" required value="${esc(ho.customerName||cu.name||'')}"></label>
+    <label>ชื่อผู้ให้บริการ (ผู้ดูแล / วิศวกร / พนักงานบริการหลังการขาย) *<input name="staffName" required value="${esc(ho.staffName||me().name||'')}"></label>
     <div class="full sig-grid">
-      <div><div class="sig-label">ลายเซ็นลูกค้า * <button type="button" class="btn sm" data-clear="cust">ล้าง</button></div><canvas class="sig" id="sig-cust"></canvas></div>
-      <div><div class="sig-label">ลายเซ็นเจ้าหน้าที่ <button type="button" class="btn sm" data-clear="staff">ล้าง</button></div><canvas class="sig" id="sig-staff"></canvas></div>
+      <div><div class="sig-label">ลงชื่อผู้รับบริการ (ลูกค้า) * <button type="button" class="btn sm" data-clear="cust">ล้าง</button></div><canvas class="sig" id="sig-cust"></canvas></div>
+      <div><div class="sig-label">ลงชื่อผู้ให้บริการ <button type="button" class="btn sm" data-clear="staff">ล้าง</button></div><canvas class="sig" id="sig-staff"></canvas></div>
     </div>
     <div class="actions full">
       ${canSkip?`<button type="button" class="btn" id="ho-skip" style="margin-right:auto">ปิดเคสโดยยังไม่เซ็น</button>`:''}
@@ -1011,6 +1040,8 @@ function openSignHandover(id, mode){
     try{
       const ts=Date.now(), up=async(pad,who)=>{ if(pad.isEmpty()) return ''; const path=`${id}/handover-${ts}-${who}.png`; await q(sb.storage.from(BUCKET).upload(path, await pad.toBlob(), {contentType:'image/png'}), 'อัปโหลดลายเซ็น'); return path; };
       const handover={ signedAt:new Date().toISOString(), customerName:d.customerName.trim(), staffName:d.staffName.trim(), workSummary:d.workSummary.trim(),
+        docNo:d.docNo.trim(), docDate:d.docDate||todayISO(), refQuotation:d.refQuotation.trim()||'-', refReceipt:d.refReceipt.trim()||'-', taxId:d.taxId.trim()||'-',
+        address:d.address.trim(), items:d.items.split('\n').map(x=>x.trim()).filter(Boolean), advice:d.advice.trim(),
         customerRemark:d.customerRemark.trim(), accepted:!!d.accepted, sigCustomer:await up(pads.cust,'customer'), sigStaff:await up(pads.staff,'staff'), recordedBy:me().name||me().email };
       await finishClose(c, mode, handover);
     }finally{ busy(btn,false); }
@@ -1032,35 +1063,53 @@ async function finishClose(c, mode, handover){
   await loadAll(); openCase(id, true);
   if(handover && confirm('บันทึกใบส่งมอบงานแล้ว ต้องการพิมพ์ / บันทึกเป็น PDF เลยไหม?')) printCaseHandover(id);
 }
-async function printCaseHandover(id){
-  const c=DB.cases.find(x=>x.id===id), cu=customer(c.customerId), ho=c.handover; if(!ho) return toast('ยังไม่มีใบส่งมอบงาน');
-  try{ await loadScript('assets/brand.js'); }catch(e){}
-  const paths=[ho.sigCustomer, ho.sigStaff, ...c.photos.map(p=>p.path)].filter(Boolean);
-  const urls={}; if(paths.length){ const {data}=await sb.storage.from(BUCKET).createSignedUrls(paths, 3600); (data||[]).forEach(x=>urls[x.path]=x.signedUrl); }
-  const photos=c.photos.filter(p=>urls[p.path]).slice(0,6);
-  $('#print-area').innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #C00000;padding-bottom:8px;margin-bottom:12px">
-      <div><div style="font-size:20px;font-weight:700;color:#C00000">ใบส่งมอบงานบริการหลังการขาย</div><div style="font-size:12px">Aftersale Service · เลขที่ ${esc(c.code)}</div></div>
-      ${window.AFS_BRAND?`<img src="${window.AFS_BRAND.logo}" style="height:48px">`:''}
+// เลขที่ใบส่งมอบแบบ BAUEN: รหัสบ้าน + A + ลำดับเคสของบ้าน (เช่น BAUAR0421_XP01A03)
+function afterSalesNo(c){
+  const cu=customer(c.customerId); const list=DB.cases.filter(x=>x.customerId===c.customerId).sort((a,b)=>(a.openedAt||'').localeCompare(b.openedAt||'')||a.code.localeCompare(b.code));
+  return (cu.house||c.code)+'A'+String(list.findIndex(x=>x.id===c.id)+1).padStart(2,'0');
+}
+const COMPANY = {name:'บริษัท เอสซีจี ลิฟวิง แอนด์ เฮาส์ซิง โซลูชัน จำกัด', addr1:'เลขที่ 1 ถนนปูนซิเมนต์ไทย แขวง บางซื่อ', addr2:'เขต บางซื่อ กทม. 10800', taxId:'0105561176543',
+  note:'หมายเหตุ: หากมีข้อสงสัยเพิ่มเติม สามารถติดต่อ BAUEN Customer Service ได้ที่ 02-254-9883 ในเวลาทำการ 10.00-18.00 น.'};
+// ใบส่งมอบงานตามแบบฟอร์ม "ใบส่งมอบงาน After Sales" (ต้นฉบับ + สำเนาสำหรับลูกค้า ในหน้า A4 เดียว)
+function handoverFormHTML(d){
+  const addrLines = String(d.address||'').split(/\n/).map(x=>x.trim()).filter(Boolean);
+  const items = d.items.length ? d.items : [''];
+  const rows = items.map((t,i)=>`<tr><td class="c">${t?i+1:''}</td><td>${esc(t)}</td><td class="c">${t?1:''}</td><td class="c">${t?'Job':''}</td><td>${i===0?esc(d.advice||''):''}</td></tr>`).join('')
+    + Array.from({length:Math.max(0,4-items.length)},()=>'<tr class="blank"><td></td><td></td><td></td><td></td><td></td></tr>').join('');
+  const sig = (img, title, sub, name, date) => `<div class="hf-sig"><div class="t">${title}</div><div class="s">${sub||'&nbsp;'}</div>
+      <div class="img">${img?`<img src="${img}">`:''}</div><div class="line">${name?`( ${esc(name)} )`:'..............................................................'}</div><div class="d">วันที่ ${date?thDate(date):'………./………/………..'}</div></div>`;
+  const copy = label => `<section class="hf">
+    <div class="hf-top">
+      <div class="hf-left">${window.AFS_BRAND?.bauen?`<img class="hf-logo" src="${window.AFS_BRAND.bauen}">`:'<div class="hf-logo-t">BAUEN</div>'}<div class="hf-title">ใบส่งมอบงานบริการหลังการขาย</div></div>
+      <div class="hf-meta"><table><tr><th>Case Number</th><td>${esc(d.docNo)}</td></tr><tr><th>Date/วันที่</th><td>${d.docDate?thDateLong(d.docDate):''}</td></tr>
+        <tr><th>Ref Quotation</th><td>${esc(d.refQuotation||'-')}</td></tr><tr><th>Ref Receipt</th><td>${esc(d.refReceipt||'-')}</td></tr></table>
+        <div class="hf-copy">${label}</div></div>
     </div>
-    <table style="width:100%;margin-bottom:10px"><tbody>
-      <tr><td style="width:20%"><b>ลูกค้า</b></td><td>${esc(cu.name)}</td><td style="width:18%"><b>รหัสบ้านลูกค้า</b></td><td>${esc(cu.house||'-')}</td></tr>
-      <tr><td><b>เรื่องที่แจ้ง</b></td><td colspan="3">${esc(c.title)}${c.detail?'<br><small>'+esc(c.detail)+'</small>':''}</td></tr>
-      <tr><td><b>หมวดงาน</b></td><td>${esc(c.category)}${c.subcategory?'<br><small>'+esc(c.subcategory)+'</small>':''}</td><td><b>Warranty</b></td><td>${esc(c.warranty||'-')}</td></tr>
-      <tr><td><b>วันที่แจ้ง</b></td><td>${thDate(c.openedAt)}</td><td><b>วันที่เข้าแก้ไข</b></td><td>${thDate(c.visitedAt)}</td></tr>
-      <tr><td><b>เข้าแก้ไขโดย</b></td><td>${esc(c.fixContractor||'-')}</td><td><b>ผู้รับผิดชอบ</b></td><td>${esc(c.assignee||'-')}</td></tr>
-      <tr><td><b>ผลการแก้ไข</b></td><td colspan="3">${esc(ho.workSummary||'-')}</td></tr>
-      ${ho.customerRemark?`<tr><td><b>หมายเหตุลูกค้า</b></td><td colspan="3">${esc(ho.customerRemark)}</td></tr>`:''}
-    </tbody></table>
-    ${photos.length?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${photos.map(p=>`<figure style="margin:0;width:31%"><img src="${urls[p.path]}" style="width:100%;height:120px;object-fit:cover;border:1px solid #999"><figcaption style="font-size:11px;text-align:center">${p.tag==='before'?'ก่อนแก้ไข':'หลังแก้ไข'}</figcaption></figure>`).join('')}</div>`:''}
-    <p style="margin:10px 0">${ho.accepted?'☑':'☐'} ข้าพเจ้าได้ตรวจสอบงานแก้ไขตามรายการข้างต้นแล้ว และยอมรับการส่งมอบงาน</p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:20px;text-align:center">
-      <div>${urls[ho.sigCustomer]?`<img src="${urls[ho.sigCustomer]}" style="height:80px;max-width:100%">`:'<div style="height:80px"></div>'}<div style="border-top:1px solid #000;padding-top:4px">(${esc(ho.customerName)})<br>ลูกค้า / ผู้รับมอบงาน<br>วันที่ ${thDateLong(localISO(new Date(ho.signedAt)))}</div></div>
-      <div>${urls[ho.sigStaff]?`<img src="${urls[ho.sigStaff]}" style="height:80px;max-width:100%">`:'<div style="height:80px"></div>'}<div style="border-top:1px solid #000;padding-top:4px">(${esc(ho.staffName)})<br>เจ้าหน้าที่ Aftersale Service<br>วันที่ ${thDateLong(localISO(new Date(ho.signedAt)))}</div></div>
-    </div>`;
+    <div class="hf-parties">
+      <div><b>From/จาก</b><br>${COMPANY.name}<br>${COMPANY.addr1}<br>${COMPANY.addr2}<br>Tax ID: ${COMPANY.taxId}</div>
+      <div><b>TO/ถึง</b><br>${esc(d.customerName)}<br>${addrLines.length?addrLines.map(esc).join('<br>'):'&nbsp;'}<br>Tax ID: ${esc(d.taxId||'-')}<br>Customer ID: ${esc(d.customerId||'-')}</div>
+    </div>
+    <table class="hf-items"><thead><tr><th style="width:9%">ลำดับ</th><th>รายการ</th><th style="width:11%">จำนวน</th><th style="width:10%">หน่วย</th><th style="width:28%">หมายเหตุ/คำแนะนำบริการ</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="hf-note">${COMPANY.note}</div>
+    <div class="hf-sigs">${sig(d.sigCustomerUrl,'ลงชื่อผู้รับบริการ','',d.signed?d.customerName:'',d.signed?d.docDate:'')}${sig(d.sigStaffUrl,'ลงชื่อผู้ให้บริการ','ผู้ดูแล / วิศวกร / พนักงานบริการหลังการขาย',d.signed?d.staffName:'',d.signed?d.docDate:'')}</div>
+  </section>`;
+  return `<div class="hf-page">${copy('ต้นฉบับ')}<div class="hf-cut"></div>${copy('สำเนาสำหรับลูกค้า')}</div>`;
+}
+async function printHandoverDoc(d, fileTitle){
+  try{ await loadScript('assets/brand.js'); }catch(e){}
+  $('#print-area').innerHTML = handoverFormHTML(d);
   const imgs=[...$('#print-area').querySelectorAll('img')];
   await Promise.all(imgs.map(i=>i.complete?1:new Promise(r=>{ i.onload=i.onerror=r; })));
-  document.title=`ใบส่งมอบงาน_${c.code}`; window.print(); document.title='Aftersale Service | จัดการเคสบริการหลังการขาย';
+  document.title=fileTitle; window.print(); document.title='Aftersale Service | จัดการเคสบริการหลังการขาย';
+}
+async function printCaseHandover(id){
+  const c=DB.cases.find(x=>x.id===id), cu=customer(c.customerId), ho=c.handover; if(!ho) return toast('ยังไม่มีใบส่งมอบงาน');
+  const paths=[ho.sigCustomer, ho.sigStaff].filter(Boolean);
+  const urls={}; if(paths.length){ const {data}=await sb.storage.from(BUCKET).createSignedUrls(paths, 3600); (data||[]).forEach(x=>urls[x.path]=x.signedUrl); }
+  await printHandoverDoc({ docNo:ho.docNo||afterSalesNo(c), docDate:ho.docDate||localISO(new Date(ho.signedAt)), refQuotation:ho.refQuotation, refReceipt:ho.refReceipt,
+    customerName:ho.customerName||cu.name, address:ho.address||cu.address, taxId:ho.taxId, customerId:cu.house,
+    items:ho.items||[ho.workSummary||c.title], advice:ho.advice||ho.customerRemark||'', staffName:ho.staffName, signed:true,
+    sigCustomerUrl:urls[ho.sigCustomer], sigStaffUrl:urls[ho.sigStaff] }, `ใบส่งมอบงาน_${ho.docNo||afterSalesNo(c)}`);
 }
 async function closeCase(id){
   const c=DB.cases.find(x=>x.id===id); const note = prompt(`ปิดเคส ${c.code} — สรุปผลงาน (ไม่บังคับ)`, ''); if(note===null) return;
@@ -1481,18 +1530,10 @@ function openHandover(customerId){
     const ids=[...document.querySelectorAll('#modal input[type=checkbox][value]:checked')].map(i=>i.value);
     if(!ids.length) return toast('กรุณาเลือกอย่างน้อย 1 เคส');
     const sel=cs.filter(x=>ids.includes(x.id));
-    $('#print-area').innerHTML = `<h1>ใบส่งมอบงานบริการหลังการขาย</h1><p style="text-align:center;margin:0 0 18px">Aftersale Service · วันที่ ${thDateLong()}</p>
-    <table style="width:100%;margin-bottom:14px"><tbody>
-      <tr><td style="width:22%"><b>ลูกค้า</b></td><td>${esc(c.name)}</td><td style="width:18%"><b>โทรศัพท์</b></td><td>${esc(c.phone||'-')}</td></tr>
-      <tr><td><b>รหัสบ้านลูกค้า</b></td><td>${esc(c.house||'-')}${c.project?' / '+esc(c.project):''}</td><td><b>ระยะประกัน</b></td><td>${thDate(c.handoverDate)} – ${thDate(wEndOf(c))}${c.structEnd&&!c.structNA?'<br>โครงสร้าง ถึง '+thDate(c.structEnd):''}</td></tr>
-      <tr><td><b>ที่อยู่</b></td><td colspan="3">${esc(c.address||'-')}</td></tr></tbody></table>
-    <table style="width:100%"><thead><tr><th>#</th><th>เลขเคส</th><th>รายการแจ้งซ่อม</th><th>ตำแหน่ง</th><th>วันที่แจ้ง</th><th>ผลการแก้ไข</th></tr></thead><tbody>
-    ${sel.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.code)}</td><td>${esc(x.title)}${x.detail?'<br><small>'+esc(x.detail)+'</small>':''}</td><td>${esc(x.location||'-')}</td><td>${thDate(x.openedAt)}</td><td>☐ เรียบร้อย &nbsp; ☐ ไม่เรียบร้อย</td></tr>`).join('')}</tbody></table>
-    <p style="margin-top:16px">ข้าพเจ้าได้ตรวจสอบงานแก้ไขตามรายการข้างต้นแล้ว และยอมรับการส่งมอบงาน</p>
-    <div class="sign"><div>ลงชื่อ ..................................................<br>(${esc(c.name)})<br>ลูกค้า<br>วันที่ ........../........../..........</div>
-    <div>ลงชื่อ ..................................................<br>(..................................................)<br>เจ้าหน้าที่ Aftersale Service<br>วันที่ ........../........../..........</div></div>`;
     const closeAfter=$('#ho-close').checked;
-    closeAll(); window.print();
+    closeAll();
+    await printHandoverDoc({ docNo:(c.house||'AFS')+'A'+todayISO().replace(/-/g,'').slice(2), docDate:todayISO(), refQuotation:'-', refReceipt:'-',
+      customerName:c.name, address:c.address, taxId:'-', customerId:c.house, items:sel.map(x=>x.title), advice:'', signed:false }, `ใบส่งมอบงาน_${c.house||c.name}`);
     if(closeAfter){
       for(const x of sel) if(x.status!=='closed'){ await q(sb.from('cases').update({status:'closed', closed_at:todayISO()}).eq('id',x.id), 'ปิดเคส'); await addLog(x.id,'ปิดเคส (ออกใบส่งมอบงาน)'); }
       toast('ปิดเคสแล้ว'); scheduleReload();
