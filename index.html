@@ -439,7 +439,7 @@ function getConfig(){
 async function q(promise, what='ทำรายการ'){
   const {data, error} = await promise;
   if(error){ console.error(error);
-    const msg = /customers_house_uniq|duplicate key/i.test(error.message) ? 'รหัสบ้านลูกค้านี้มีอยู่แล้ว กรุณาตรวจสอบ (บ้านที่ทำสัญญาใหม่ให้ใช้ _02, _03 …)' : error.message;
+    const msg = /cases_ref_case_uniq/i.test(error.message) ? 'Ref Case ID นี้ถูกใช้กับเคสอื่นแล้ว กรุณาตรวจสอบเลข' : /customers_house_uniq|duplicate key/i.test(error.message) ? 'รหัสบ้านลูกค้านี้มีอยู่แล้ว กรุณาตรวจสอบ (บ้านที่ทำสัญญาใหม่ให้ใช้ _02, _03 …)' : error.message;
     alert(`${what}ไม่สำเร็จ: ${msg}`); throw error; }
   return data;
 }
@@ -466,7 +466,7 @@ function fillWarranty(d){
 }
 const wEndOf = c => c.warrantyEnd || (c.handoverDate ? warrantyEndFrom(c.handoverDate,WARRANTY_YEARS) : '');
 const fromCase = r => ({id:r.id, code:r.code, customerId:r.customer_id, title:r.title||'', detail:r.detail||'', location:r.location||'', category:r.category||'อื่นๆ', priority:r.priority, status:r.status, assignee:r.assignee||'', openedAt:r.opened_at, dueAt:r.due_at||'', closedAt:r.closed_at||'', rework:r.rework||0, photos:r.photos||[],
-  subcategory:r.subcategory||'', warranty:r.warranty||'', origContractor:r.orig_contractor||'', fixContractor:r.fix_contractor||'', visitDue:r.visit_due||'', visitedAt:r.visited_at||'', closeReqAt:r.close_requested_at||'', closeReqBy:r.close_requested_by||'', closeReqNote:r.close_request_note||'', handover:r.handover||null, delayReason:r.delay_reason||'', recoveryPlan:r.recovery_plan||'', planFinish:r.plan_finish||'', delayUpdatedAt:r.delay_updated_at||'', delayUpdatedBy:r.delay_updated_by||'', claimCost:r.claim_cost==null?'':Number(r.claim_cost)});
+  subcategory:r.subcategory||'', warranty:r.warranty||'', origContractor:r.orig_contractor||'', fixContractor:r.fix_contractor||'', visitDue:r.visit_due||'', visitedAt:r.visited_at||'', closeReqAt:r.close_requested_at||'', closeReqBy:r.close_requested_by||'', closeReqNote:r.close_request_note||'', handover:r.handover||null, refCaseId:r.ref_case_id||'', delayReason:r.delay_reason||'', recoveryPlan:r.recovery_plan||'', planFinish:r.plan_finish||'', delayUpdatedAt:r.delay_updated_at||'', delayUpdatedBy:r.delay_updated_by||'', claimCost:r.claim_cost==null?'':Number(r.claim_cost)});
 
 async function loadAll(){
   const [cu, ca, lg, us] = await Promise.all([
@@ -899,7 +899,7 @@ function caseTable(list, hideCustomer){
   return `<div class="table-wrap"><table class="case-table"><thead><tr><th>เคส / บ้าน</th><th>ประเภท</th><th>Warranty</th><th>งานเดิมโดย</th><th>เข้าแก้โดย</th><th>ผู้รับผิดชอบ</th><th>ความสำคัญ / SLA เข้าแก้</th><th>กำหนดปิด</th><th>สถานะ</th></tr></thead><tbody>
   ${list.map(c=>{ const cu=customer(c.customerId); return `<tr data-case="${c.id}">
     <td style="min-width:240px"><b>${esc(c.title)}</b>${c.rework?` <span class="badge b-red">Rework ×${c.rework}</span>`:''}
-      <div class="sub">${hideCustomer?'':esc(cu.name)+' · '}<span class="mono">${esc(c.code)}</span> · เปิด ${thDate(c.openedAt)}</div></td>
+      <div class="sub">${hideCustomer?'':esc(cu.name)+' · '}<span class="mono">${esc(c.code)}</span>${c.refCaseId?` · <span class="mono" style="color:var(--ink)">Ref ${esc(c.refCaseId)}</span>`:''} · เปิด ${thDate(c.openedAt)}</div></td>
     <td style="min-width:170px">${esc(c.category)}${c.subcategory?`<div class="sub">${esc(c.subcategory)}</div>`:''}</td>
     <td style="white-space:nowrap">${c.warranty?`<span class="badge ${/^in/i.test(c.warranty)?'b-green':'b-gray'}">${esc(c.warranty)}</span>`:'<span class="sub">-</span>'}</td>
     <td>${esc(c.origContractor||'—')}</td><td>${esc(c.fixContractor||'—')}</td><td>${esc(c.assignee||'—')}</td>
@@ -932,7 +932,7 @@ function renderDashboard(){
     const list = RC.filter(c=>
       (!f.status||c.status===f.status)&&(!f.priority||c.priority===f.priority)&&(!f.category||c.category===f.category)&&
       (!f.overdue||(f.overdue==='open'?isOpen(c):isOverdue(c)))&&
-      (!q||[c.code,c.title,c.detail,c.assignee,c.origContractor,c.fixContractor,c.subcategory,customer(c.customerId).name,customer(c.customerId).house].join(' ').toLowerCase().includes(q))
+      (!q||[c.code,c.refCaseId,c.title,c.detail,c.assignee,c.origContractor,c.fixContractor,c.subcategory,customer(c.customerId).name,customer(c.customerId).house].join(' ').toLowerCase().includes(q))
     ).sort((a,b)=>(b.openedAt||'').localeCompare(a.openedAt||'')||b.code.localeCompare(a.code));
     $('#case-list').innerHTML = `<p class="sub" style="margin:0 0 8px">${list.length} เคส${dateRange.from||dateRange.to?' · แจ้งช่วง '+rangeLabel():''}</p>` + caseTable(list); bindRows();
   };
@@ -1004,7 +1004,7 @@ function openSignHandover(id, mode){
     <div class="sub" style="margin-top:6px">เปิดเคส ${thDate(c.openedAt)}${c.visitedAt?' · เข้าแก้ '+thDate(c.visitedAt):''}${c.fixContractor?' · เข้าแก้โดย '+esc(c.fixContractor):''}</div>
   </div>
   <form class="form" id="hof" style="margin-top:12px">
-    <label>Case Number (เลขที่ใบส่งมอบ)<input name="docNo" value="${esc(ho.docNo||afterSalesNo(c))}"></label>
+    <label>Case Number (เลขที่ใบส่งมอบ)<input name="docNo" value="${esc(c.refCaseId||ho.docNo||afterSalesNo(c))}"></label>
     <label>Date / วันที่<input type="date" name="docDate" value="${esc(ho.docDate||todayISO())}"></label>
     <label>Ref Quotation<input name="refQuotation" value="${esc(ho.refQuotation||'-')}"></label>
     <label>Ref Receipt<input name="refReceipt" value="${esc(ho.refReceipt||'-')}"></label>
@@ -1050,6 +1050,7 @@ function openSignHandover(id, mode){
 async function finishClose(c, mode, handover){
   const id=c.id, patch={};
   if(handover) patch.handover=handover;
+  if(handover?.docNo && !c.refCaseId) patch.ref_case_id=handover.docNo.toUpperCase();   // ล็อกเลขที่ใช้ในใบส่งมอบเป็น Ref Case ID
   const closing = mode==='close'||mode==='approve';
   if(closing){ patch.status='closed'; patch.closed_at=todayISO(); patch.close_requested_at=null; }
   if(mode==='request'){ patch.close_requested_at=new Date().toISOString(); patch.close_requested_by=me().name||me().email; patch.close_request_note=handover?.workSummary||'ลูกค้าเซ็นใบส่งมอบแล้ว'; }
@@ -1064,10 +1065,19 @@ async function finishClose(c, mode, handover){
   if(handover && confirm('บันทึกใบส่งมอบงานแล้ว ต้องการพิมพ์ / บันทึกเป็น PDF เลยไหม?')) printCaseHandover(id);
 }
 // เลขที่ใบส่งมอบแบบ BAUEN: รหัสบ้าน + A + ลำดับเคสของบ้าน (เช่น BAUAR0421_XP01A03)
-function afterSalesNo(c){
-  const cu=customer(c.customerId); const list=DB.cases.filter(x=>x.customerId===c.customerId).sort((a,b)=>(a.openedAt||'').localeCompare(b.openedAt||'')||a.code.localeCompare(b.code));
-  return (cu.house||c.code)+'A'+String(list.findIndex(x=>x.id===c.id)+1).padStart(2,'0');
+// Ref Case ID: ใช้เลขที่กรอกเองเป็นหลัก ถ้าไม่มี → เลขถัดไปต่อจากเลขสูงสุดของบ้านนั้น (รวมเคสในระบบเดิมที่กรอก Ref ไว้)
+function refNumsOf(customerId, exceptId){
+  const cu=customer(customerId), pre=String(cu.house||'').toUpperCase()+'A';
+  return DB.cases.filter(x=>x.customerId===customerId && x.id!==exceptId).flatMap(x=>[x.refCaseId, x.handover?.docNo]).filter(Boolean)
+    .map(v=>String(v).toUpperCase()).filter(v=>v.startsWith(pre)).map(v=>parseInt(v.slice(pre.length),10)).filter(n=>!isNaN(n));
 }
+function nextRefFor(customerId, exceptId){
+  const cu=customer(customerId); if(!cu.house) return '';
+  const nums=refNumsOf(customerId, exceptId);
+  const n = nums.length ? Math.max(...nums)+1 : DB.cases.filter(x=>x.customerId===customerId && x.id!==exceptId).length+1;
+  return cu.house.toUpperCase()+'A'+String(n).padStart(2,'0');
+}
+function afterSalesNo(c){ return c.refCaseId || nextRefFor(c.customerId, c.id) || c.code; }
 const COMPANY = {name:'บริษัท เอสซีจี ลิฟวิง แอนด์ เฮาส์ซิง โซลูชัน จำกัด', addr1:'เลขที่ 1 ถนนปูนซิเมนต์ไทย แขวง บางซื่อ', addr2:'เขต บางซื่อ กทม. 10800', taxId:'0105561176543',
   note:'หมายเหตุ: หากมีข้อสงสัยเพิ่มเติม สามารถติดต่อ BAUEN Customer Service ได้ที่ 02-254-9883 ในเวลาทำการ 10.00-18.00 น.'};
 // ใบส่งมอบงานตามแบบฟอร์ม "ใบส่งมอบงาน After Sales" (ต้นฉบับ + สำเนาสำหรับลูกค้า ในหน้า A4 เดียว)
@@ -1106,10 +1116,10 @@ async function printCaseHandover(id){
   const c=DB.cases.find(x=>x.id===id), cu=customer(c.customerId), ho=c.handover; if(!ho) return toast('ยังไม่มีใบส่งมอบงาน');
   const paths=[ho.sigCustomer, ho.sigStaff].filter(Boolean);
   const urls={}; if(paths.length){ const {data}=await sb.storage.from(BUCKET).createSignedUrls(paths, 3600); (data||[]).forEach(x=>urls[x.path]=x.signedUrl); }
-  await printHandoverDoc({ docNo:ho.docNo||afterSalesNo(c), docDate:ho.docDate||localISO(new Date(ho.signedAt)), refQuotation:ho.refQuotation, refReceipt:ho.refReceipt,
+  await printHandoverDoc({ docNo:c.refCaseId||ho.docNo||afterSalesNo(c), docDate:ho.docDate||localISO(new Date(ho.signedAt)), refQuotation:ho.refQuotation, refReceipt:ho.refReceipt,
     customerName:ho.customerName||cu.name, address:ho.address||cu.address, taxId:ho.taxId, customerId:cu.house,
     items:ho.items||[ho.workSummary||c.title], advice:ho.advice||ho.customerRemark||'', staffName:ho.staffName, signed:true,
-    sigCustomerUrl:urls[ho.sigCustomer], sigStaffUrl:urls[ho.sigStaff] }, `ใบส่งมอบงาน_${ho.docNo||afterSalesNo(c)}`);
+    sigCustomerUrl:urls[ho.sigCustomer], sigStaffUrl:urls[ho.sigStaff] }, `ใบส่งมอบงาน_${c.refCaseId||ho.docNo||afterSalesNo(c)}`);
 }
 async function closeCase(id){
   const c=DB.cases.find(x=>x.id===id); const note = prompt(`ปิดเคส ${c.code} — สรุปผลงาน (ไม่บังคับ)`, ''); if(note===null) return;
@@ -1126,8 +1136,8 @@ function contractorPanel(){
   ${rows.map(([n,v])=>`<tr style="cursor:pointer" onclick="filters.q='${esc(n).replace(/'/g,"\\'")}';renderDashboard()"><td>${esc(n)}</td><td style="text-align:center">${v.orig||'<span class="sub">0</span>'}</td><td style="text-align:center">${v.fix||'<span class="sub">0</span>'}</td></tr>`).join('')}</tbody></table></div></div>`;
 }
 function exportCSV(){
-  const rows=[['เลขเคส','รหัสบ้าน','ลูกค้า','เรื่อง','รายละเอียด','ตำแหน่ง','ประเภท','ประเภทย่อย','Warranty','งานเดิมโดย','เข้าแก้โดย','ความสำคัญ','สถานะ','ผู้รับผิดชอบ','เปิดเคส','SLA เข้าแก้','เข้าแก้จริง','กำหนดปิด','ปิดเคส','Rework','มูลค่างาน Claim']];
-  rangedCases().forEach(c=>{ const cu=customer(c.customerId); rows.push([c.code,cu.house,cu.name,c.title,c.detail,c.location,c.category,c.subcategory,c.warranty,c.origContractor,c.fixContractor,pr(c.priority).label,st(c.status).label,c.assignee,c.openedAt,c.visitDue,c.visitedAt,c.dueAt,c.closedAt,c.rework,c.claimCost]); });
+  const rows=[['เลขเคส','Ref Case ID','รหัสบ้าน','ลูกค้า','เรื่อง','รายละเอียด','ตำแหน่ง','ประเภท','ประเภทย่อย','Warranty','งานเดิมโดย','เข้าแก้โดย','ความสำคัญ','สถานะ','ผู้รับผิดชอบ','เปิดเคส','SLA เข้าแก้','เข้าแก้จริง','กำหนดปิด','ปิดเคส','Rework','มูลค่างาน Claim']];
+  rangedCases().forEach(c=>{ const cu=customer(c.customerId); rows.push([c.code,c.refCaseId,cu.house,cu.name,c.title,c.detail,c.location,c.category,c.subcategory,c.warranty,c.origContractor,c.fixContractor,pr(c.priority).label,st(c.status).label,c.assignee,c.openedAt,c.visitDue,c.visitedAt,c.dueAt,c.closedAt,c.rework,c.claimCost]); });
   download('afs-cases-'+todayISO()+'.csv', '﻿'+rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n'), 'text/csv');
 }
 function download(name, data, type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type})); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
@@ -1359,7 +1369,9 @@ async function uploadPhotos(caseId, files, tag){
 const contractorList = () => [...new Set(DB.cases.flatMap(c=>[c.origContractor,c.fixContractor]).filter(v=>v&&v!=='—'))].sort((a,b)=>a.localeCompare(b,'th'));
 function caseExtraFields(c, ed=true){
   const dis = ed?'':'disabled';
-  return `<label>ประเภทย่อย<input name="subcategory" value="${esc(c.subcategory||'')}" placeholder="เช่น EE-M-02-03 · เมนไฟ · Breaker ทิป" ${dis}></label>
+  const sug = c.customerId ? nextRefFor(c.customerId, c.id) : '';
+  return `<label>Ref Case ID<input name="refCaseId" id="ref-case" value="${esc(c.refCaseId||'')}" placeholder="${esc(sug||'เช่น BAUAR0421_XP01A03')}" ${dis}><small class="sub" id="ref-hint">${sug?'เลขถัดไปที่แนะนำ: '+esc(sug)+' (เว้นว่าง = ใช้เลขนี้)':'เลขเคสตามระบบเดิม เช่น BAUAR0421_XP01A03'}</small></label>
+    <label>ประเภทย่อย<input name="subcategory" value="${esc(c.subcategory||'')}" placeholder="เช่น EE-M-02-03 · เมนไฟ · Breaker ทิป" ${dis}></label>
     <label>Warranty<select name="warranty" ${dis}><option value="">—</option>${WARRANTY_OPTS.map(w=>`<option ${c.warranty===w?'selected':''}>${w}</option>`).join('')}</select></label>
     <label>งานเดิมโดย (ผู้รับเหมา)<input name="origContractor" value="${esc(c.origContractor||'')}" list="contractors" ${dis}></label>
     <label>เข้าแก้โดย<input name="fixContractor" value="${esc(c.fixContractor||'')}" list="contractors" ${dis}></label>
@@ -1384,6 +1396,8 @@ function openNewCase(customerId){
     <label class="full">แนบภาพ Before (ไม่บังคับ)<input type="file" name="photos" accept="image/*" multiple></label>
     <div class="actions full"><button type="button" class="btn" onclick="closeAll()">ยกเลิก</button><button class="btn primary">เปิดเคส</button></div>
   </form>`);
+  const upRef=()=>{ const cid=$('#nf select[name=customerId]').value, sg=nextRefFor(cid); $('#ref-case').placeholder=sg||'เช่น BAUAR0421_XP01A03'; $('#ref-hint').textContent=sg?'เลขถัดไปที่แนะนำ: '+sg+' (เว้นว่าง = ใช้เลขนี้)':'เลขเคสตามระบบเดิม'; };
+  $('#nf select[name=customerId]').onchange=upRef; upRef();
   $('#nf').onsubmit=async e=>{
     e.preventDefault(); const btn=e.submitter; busy(btn,true);
     const fd=new FormData(e.target); const d=Object.fromEntries(fd);
@@ -1391,7 +1405,7 @@ function openNewCase(customerId){
       const opened = d.openedAt || todayISO();
       const row = await q(sb.from('cases').insert({customer_id:d.customerId, title:d.title, detail:d.detail, location:d.location, category:d.category, priority:d.priority,
         status:d.assignee?'assigned':'new', assignee:d.assignee, opened_at:opened, due_at:d.dueAt||null, visit_due:addDays(opened, pr(d.priority).days),
-        subcategory:d.subcategory, warranty:d.warranty, orig_contractor:d.origContractor, fix_contractor:d.fixContractor, claim_cost:d.claimCost===''?null:Number(d.claimCost)}).select().single(), 'เปิดเคส');
+        subcategory:d.subcategory, warranty:d.warranty, orig_contractor:d.origContractor, fix_contractor:d.fixContractor, ref_case_id:((d.refCaseId||'').trim()||nextRefFor(d.customerId)).toUpperCase(), claim_cost:d.claimCost===''?null:Number(d.claimCost)}).select().single(), 'เปิดเคส');
       await addLog(row.id, 'เปิดเคส'+(d.assignee?` · มอบหมายให้ ${d.assignee}`:''));
       const files = fd.getAll('photos').filter(f=>f.size);
       if(files.length){ const photos = await uploadPhotos(row.id, files, 'before'); await q(sb.from('cases').update({photos}).eq('id',row.id), 'บันทึกรูป'); }
@@ -1410,7 +1424,7 @@ async function openCase(id, silent){
   const statusOpts = STATUSES.filter(s=>s.key!=='closed'||can('close')||c.status==='closed');
   const scroll = $('#drawer').scrollTop;
   $('#drawer').innerHTML = `<button class="x" onclick="closeAll()">×</button>
-  <div class="mono">${esc(c.code)}</div>
+  <div class="mono">${esc(c.code)}${c.refCaseId?` · Ref Case ID: <b style="color:var(--ink)">${esc(c.refCaseId)}</b>`:''}</div>
   <h2 style="margin:2px 0 6px;font-size:19px">${esc(c.title)}</h2>
   <div style="display:flex;gap:6px;flex-wrap:wrap">${badge(st(c.status))}${badge(pr(c.priority))}${isOverdue(c)?'<span class="badge b-red">เกินกำหนด</span>':''}${c.rework?`<span class="badge b-red">Rework ${c.rework}/${MAX_REWORK}</span>`:''}</div>
   <div class="info-grid">
@@ -1471,13 +1485,14 @@ async function openCase(id, silent){
     if(d.dueAt!==cur.dueAt) changes.push(`กำหนดปิด: ${thDate(d.dueAt)}`);
     if(d.visitedAt!==cur.visitedAt) changes.push(`เข้าแก้: ${thDate(d.visitedAt)}`);
     if(d.fixContractor!==cur.fixContractor) changes.push(`เข้าแก้โดย: ${d.fixContractor||'-'}`);
+    if((d.refCaseId||'').trim().toUpperCase()!==cur.refCaseId) changes.push(`Ref Case ID: ${(d.refCaseId||'').trim().toUpperCase()||'-'}`);
     if(String(d.claimCost)!==String(cur.claimCost)) changes.push(`มูลค่างาน Claim: ${d.claimCost?fmtMoney(d.claimCost)+' บาท':'-'}`);
     const note=d.note.trim();
     const toClose = d.status==='closed' && cur.status!=='closed';
     if(toClose){ d.status=cur.status; changes.splice(0,1); }
     try{
       const patch = {status:d.status, assignee:d.assignee, priority:d.priority, category:d.category, due_at:d.dueAt||null, location:d.location, title:d.title, detail:d.detail,
-        subcategory:d.subcategory, warranty:d.warranty, orig_contractor:d.origContractor, fix_contractor:d.fixContractor, visit_due:d.visitDue||null, visited_at:d.visitedAt||null, claim_cost:d.claimCost===''?null:Number(d.claimCost)};
+        subcategory:d.subcategory, warranty:d.warranty, orig_contractor:d.origContractor, fix_contractor:d.fixContractor, visit_due:d.visitDue||null, visited_at:d.visitedAt||null, ref_case_id:(d.refCaseId||'').trim().toUpperCase(), claim_cost:d.claimCost===''?null:Number(d.claimCost)};
       if(d.status!==cur.status) patch.closed_at = d.status==='closed' ? todayISO() : null;
       await q(sb.from('cases').update(patch).eq('id',id), 'บันทึกเคส');
       if(changes.length) await addLog(id, changes.join(' · '));
