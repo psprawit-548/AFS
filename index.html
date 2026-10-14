@@ -952,7 +952,7 @@ function closeRequestPanel(){
 function closeBox(c){
   const ho = c.handover;
   const hoLine = ho?.signedAt ? `<div class="notice" style="background:var(--green-soft);color:#0b5d3b;margin-top:12px">✍️ <b>ลูกค้าเซ็นใบส่งมอบแล้ว</b> · ${esc(ho.customerName||'')} · ${thDateTime(ho.signedAt)}
-      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn sm" onclick="printCaseHandover('${c.id}')">ดู / พิมพ์ใบส่งมอบงาน</button>${can('edit')?`<button class="btn sm" onclick="openSignHandover('${c.id}','resign')">เซ็นใหม่</button>`:''}</div></div>` : '';
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn sm" onclick="printCaseHandover('${c.id}')">ดู / พิมพ์ใบส่งมอบงาน</button>${can('close')?`<button class="btn sm" onclick="openEditHandover('${c.id}')">✏️ แก้ไขข้อมูลในใบ</button>`:''}${can('edit')?`<button class="btn sm" onclick="openSignHandover('${c.id}','resign')">เซ็นใหม่</button>`:''}</div></div>` : '';
   if(!isOpen(c)) return hoLine || (can('edit')?`<div class="notice" style="margin-top:12px">ยังไม่มีลายเซ็นลูกค้าในใบส่งมอบงาน<div style="margin-top:8px"><button class="btn sm primary" onclick="openSignHandover('${c.id}','sign')">✍️ ให้ลูกค้าเซ็นใบส่งมอบ</button></div></div>`:'');
   if(closePending(c)) return hoLine + `<div class="notice" style="background:var(--orange-soft);color:#8a4a0b;margin-top:12px">⏳ <b>รออนุมัติปิดเคส</b> · ขอโดย ${esc(c.closeReqBy)} เมื่อ ${thDateTime(c.closeReqAt)}${c.closeReqNote?`<br>“${esc(c.closeReqNote)}”`:''}
     ${can('close')?`<div style="display:flex;gap:8px;margin-top:8px"><button class="btn sm primary" onclick="approveClose('${c.id}')">อนุมัติปิดเคส</button><button class="btn sm danger" onclick="rejectClose('${c.id}')">ไม่อนุมัติ</button></div>`:''}</div>`;
@@ -1111,6 +1111,49 @@ async function printHandoverDoc(d, fileTitle){
   const imgs=[...$('#print-area').querySelectorAll('img')];
   await Promise.all(imgs.map(i=>i.complete?1:new Promise(r=>{ i.onload=i.onerror=r; })));
   document.title=fileTitle; window.print(); document.title='Aftersale Service | จัดการเคสบริการหลังการขาย';
+}
+// แก้ไขข้อมูลในใบส่งมอบที่เซ็นแล้ว (ไม่ต้องเซ็นใหม่) — เก็บค่าเดิมไว้ใน handover.history เพื่อตรวจสอบย้อนหลัง
+const HO_FIELDS = {docNo:'Case Number', docDate:'วันที่', refQuotation:'Ref Quotation', refReceipt:'Ref Receipt', taxId:'Tax ID', address:'ที่อยู่', items:'รายการ', advice:'หมายเหตุ/คำแนะนำ', customerName:'ชื่อผู้รับบริการ', staffName:'ชื่อผู้ให้บริการ'};
+function openEditHandover(id){
+  const c=DB.cases.find(x=>x.id===id), cu=customer(c.customerId), ho=c.handover||{};
+  const v={ docNo:c.refCaseId||ho.docNo||afterSalesNo(c), docDate:ho.docDate||localISO(new Date(ho.signedAt)), refQuotation:ho.refQuotation||'-', refReceipt:ho.refReceipt||'-',
+    taxId:ho.taxId||'-', address:ho.address||cu.address||'', items:ho.items||[ho.workSummary||c.title], advice:ho.advice||ho.customerRemark||'', customerName:ho.customerName||cu.name, staffName:ho.staffName||'' };
+  modal(`<button class="x" onclick="closeAll()">×</button><h2>แก้ไขข้อมูลในใบส่งมอบงาน</h2>
+  <p class="sub"><span class="mono">${esc(c.code)}</span> · ${esc(c.title)} · เซ็นเมื่อ ${thDateTime(ho.signedAt)}</p>
+  <div class="notice" style="margin-top:10px">ลายเซ็นเดิมยังอยู่ ไม่ต้องให้ลูกค้าเซ็นใหม่ · ระบบเก็บค่าก่อนแก้ไขและบันทึกในประวัติเคสทุกครั้ง${(ho.history||[]).length?` · แก้ไขมาแล้ว ${ho.history.length} ครั้ง`:''}</div>
+  <form class="form" id="ehf">
+    <label>Case Number / Ref Case ID *<input name="docNo" required value="${esc(v.docNo)}"></label>
+    <label>Date / วันที่<input type="date" name="docDate" value="${esc(v.docDate)}"></label>
+    <label>Ref Quotation<input name="refQuotation" value="${esc(v.refQuotation)}"></label>
+    <label>Ref Receipt<input name="refReceipt" value="${esc(v.refReceipt)}"></label>
+    <label>Tax ID ลูกค้า<input name="taxId" value="${esc(v.taxId)}"></label>
+    <label>Customer ID<input value="${esc(cu.house||'-')}" disabled></label>
+    <label class="full">ที่อยู่ลูกค้า (TO/ถึง)<textarea name="address" rows="2">${esc(v.address)}</textarea></label>
+    <label class="full">รายการ (1 บรรทัด = 1 รายการ)<textarea name="items" rows="3">${esc(v.items.join('\n'))}</textarea></label>
+    <label class="full">หมายเหตุ / คำแนะนำบริการ<input name="advice" value="${esc(v.advice)}"></label>
+    <label>ชื่อผู้รับบริการ<input name="customerName" value="${esc(v.customerName)}"></label>
+    <label>ชื่อผู้ให้บริการ<input name="staffName" value="${esc(v.staffName)}"></label>
+    <label class="full">เหตุผลที่แก้ไข *<input name="reason" required placeholder="เช่น แก้เลข Case Number ให้ต่อเนื่องจากระบบเดิม"></label>
+    <div class="actions full"><button type="button" class="btn" onclick="closeAll()">ยกเลิก</button><button class="btn primary">บันทึก</button></div>
+  </form>`);
+  $('#modal').style.width='min(760px, calc(100vw - 32px))';
+  $('#ehf').onsubmit=async e=>{ e.preventDefault(); const btn=e.submitter;
+    const d=Object.fromEntries(new FormData(e.target));
+    const nv={ docNo:d.docNo.trim().toUpperCase(), docDate:d.docDate||v.docDate, refQuotation:d.refQuotation.trim()||'-', refReceipt:d.refReceipt.trim()||'-', taxId:d.taxId.trim()||'-',
+      address:d.address.trim(), items:d.items.split('\n').map(x=>x.trim()).filter(Boolean), advice:d.advice.trim(), customerName:d.customerName.trim(), staffName:d.staffName.trim() };
+    const changed=Object.keys(HO_FIELDS).filter(k=>JSON.stringify(nv[k])!==JSON.stringify(v[k]));
+    if(!changed.length) return toast('ไม่มีข้อมูลที่เปลี่ยน');
+    busy(btn,true);
+    try{
+      const before={}; changed.forEach(k=>before[k]=v[k]);
+      const handover={...ho, ...nv, history:[...(ho.history||[]), {at:new Date().toISOString(), by:me().name||me().email, reason:d.reason.trim(), before}]};
+      const patch={handover}; if(nv.docNo!==c.refCaseId) patch.ref_case_id=nv.docNo;
+      await q(sb.from('cases').update(patch).eq('id',id), 'แก้ไขใบส่งมอบ');
+      await addLog(id, `✏️ แก้ไขใบส่งมอบงาน (${changed.map(k=>HO_FIELDS[k]).join(', ')})${changed.includes('docNo')?` · ${v.docNo} → ${nv.docNo}`:''} · เหตุผล: ${d.reason.trim()}`);
+      closeAll(); toast('แก้ไขใบส่งมอบแล้ว'); await loadAll(); openCase(id, true);
+      if(confirm('ต้องการพิมพ์ / บันทึก PDF ใบส่งมอบฉบับแก้ไขเลยไหม?')) printCaseHandover(id);
+    }finally{ busy(btn,false); }
+  };
 }
 async function printCaseHandover(id){
   const c=DB.cases.find(x=>x.id===id), cu=customer(c.customerId), ho=c.handover; if(!ho) return toast('ยังไม่มีใบส่งมอบงาน');
