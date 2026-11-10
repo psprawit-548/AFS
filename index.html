@@ -263,6 +263,16 @@ canvas.sig{width:100%;height:150px;border:1.5px dashed #9ca3af;border-radius:10p
 .me-box{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;color:#fff}
 .me-box small{color:#8c98b3;display:block}
 .me-box button{background:#17264a;border:1px solid #2a3b63;color:#c7d0e3;border-radius:8px;padding:5px 9px;font-size:12px}
+.pf-table td{white-space:nowrap} .pf-table th{white-space:normal;min-width:64px;vertical-align:bottom;line-height:1.3} .pf-table tbody tr[data-person]{cursor:pointer}
+.pf-c{text-align:center;font-weight:600;border-radius:6px} td.pf-c{padding:6px 8px} .pf-c .sub{font-weight:400;font-size:11px}
+.pf-c.good{background:var(--green-soft);color:var(--green)} .pf-c.warn{background:#FEF3C7;color:#8a5a00} .pf-c.bad{background:var(--red-soft);color:var(--red)} .pf-c.na{color:var(--muted)}
+.pf-key{display:flex;gap:6px;flex-wrap:wrap;font-size:12px} .pf-key span{padding:3px 8px}
+.pf-team td{background:var(--bg);font-weight:600;border-top:2px solid var(--line)}
+.pf-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle}
+.pf-svg{width:100%;height:auto;display:block;margin-top:6px} .pf-grid{stroke:var(--line);stroke-width:1} .pf-ax{font-size:11px;fill:var(--muted)} .pf-val{font-size:11px;fill:var(--ink);font-weight:600}
+.pf-legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted);margin-top:8px} .pf-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
+.pf-hs{display:flex;flex-direction:column;gap:8px;margin-top:10px} .pf-hs-row{display:grid;grid-template-columns:150px 1fr 54px;gap:8px;align-items:center;font-size:13px}
+.pf-hs-l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .pf-hs-bar{display:flex;gap:2px;height:18px} .pf-hs-bar i{display:block;height:100%;border-radius:3px;min-width:3px} .pf-hs-row b{text-align:right}
 .role-sel{border:1px solid var(--line);border-radius:8px;padding:4px 6px;background:#fff}
 </style>
 </head>
@@ -393,11 +403,13 @@ const I = {
   users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M16 4a4 4 0 0 1 0 8M22 21a7 7 0 0 0-4-6.3"/></svg>',
   upload:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg>',
   doc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>',
+  perf:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
   pin:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
 };
 const PAGES = [
   {key:'overall', label:'Overall', icon:I.overall},
   {key:'projects', label:'โครงการ / บ้านลูกค้า', icon:I.projects},
+  {key:'performance', label:'Performance', icon:I.perf},
   {key:'dashboard', label:'Dashboard · ทุกเคส', icon:I.dashboard},
   {key:'users', label:'ผู้ใช้และสิทธิ์', icon:I.users},
 ];
@@ -426,7 +438,7 @@ function show(id){ ['#loading','#setup-screen','#auth-screen','#pending-screen',
 
 /* ============ SUPABASE ============ */
 let sb = null;
-let DB = {customers:[], cases:[], logs:{}, users:[]};
+let DB = {customers:[], cases:[], logs:{}, users:[], history:{}, settings:{}};
 let ME = null;           // profile ของผู้ใช้ที่ล็อกอิน
 let view = {page:'projects', customerId:null};
 let filters = {q:'', status:'', priority:'', category:'', overdue:''};
@@ -465,15 +477,17 @@ function fillWarranty(d){
   return d;
 }
 const wEndOf = c => c.warrantyEnd || (c.handoverDate ? warrantyEndFrom(c.handoverDate,WARRANTY_YEARS) : '');
-const fromCase = r => ({id:r.id, code:r.code, customerId:r.customer_id, title:r.title||'', detail:r.detail||'', location:r.location||'', category:r.category||'อื่นๆ', priority:r.priority, status:r.status, assignee:r.assignee||'', openedAt:r.opened_at, dueAt:r.due_at||'', closedAt:r.closed_at||'', rework:r.rework||0, photos:r.photos||[],
+const fromCase = r => ({id:r.id, code:r.code, customerId:r.customer_id, title:r.title||'', detail:r.detail||'', location:r.location||'', category:r.category||'อื่นๆ', priority:r.priority, status:r.status, assignee:r.assignee||'', assigneeId:r.assignee_id||'', openedAt:r.opened_at, dueAt:r.due_at||'', closedAt:r.closed_at||'', rework:r.rework||0, photos:r.photos||[],
   subcategory:r.subcategory||'', warranty:r.warranty||'', origContractor:r.orig_contractor||'', fixContractor:r.fix_contractor||'', visitDue:r.visit_due||'', visitedAt:r.visited_at||'', closeReqAt:r.close_requested_at||'', closeReqBy:r.close_requested_by||'', closeReqNote:r.close_request_note||'', handover:r.handover||null, refCaseId:r.ref_case_id||'', delayReason:r.delay_reason||'', recoveryPlan:r.recovery_plan||'', planFinish:r.plan_finish||'', delayUpdatedAt:r.delay_updated_at||'', delayUpdatedBy:r.delay_updated_by||'', claimCost:r.claim_cost==null?'':Number(r.claim_cost)});
 
 async function loadAll(){
-  const [cu, ca, lg, us] = await Promise.all([
+  const [cu, ca, lg, us, hs, se] = await Promise.all([
     sb.from('customers').select('*').order('created_at'),
     sb.from('cases').select('*').order('created_at'),
     sb.from('case_logs').select('*').order('ts'),
     sb.from('profiles').select('*').order('created_at'),
+    sb.from('case_status_history').select('case_id,from_status,to_status,at').order('at'),
+    sb.from('app_settings').select('key,value'),
   ]);
   const bad=[cu,ca,lg,us].find(r=>r.error);
   if(bad){ console.error(bad.error); if(!$('#app').classList.contains('hidden')) return toast('โหลดข้อมูลไม่สำเร็จ: '+bad.error.message);
@@ -481,6 +495,9 @@ async function loadAll(){
   DB.customers = cu.data.map(fromCust);
   DB.cases = ca.data.map(fromCase);
   DB.users = us.data;
+  // ประวัติสถานะ/ตั้งค่า: ถ้ายังไม่มีตาราง (หรือโหลดไม่ได้) ให้ใช้งานต่อได้ตามปกติ
+  DB.history = {}; (hs.data||[]).forEach(h=>(DB.history[h.case_id] ||= []).push({from:h.from_status, to:h.to_status, at:h.at}));
+  DB.settings = {}; (se.data||[]).forEach(x=>DB.settings[x.key]=x.value);
   DB.logs = {}; lg.data.forEach(l=>(DB.logs[l.case_id] ||= []).push({ts:l.ts, by:l.by_name, text:l.text}));
   ME = DB.users.find(u=>u.id===ME.id) || ME;
   if(ME.role==='pending'){ $('#pending-email').textContent=ME.email||''; show('#pending-screen'); return; }
@@ -496,6 +513,8 @@ function subscribe(){
     .on('postgres_changes', {event:'*', schema:'public', table:'customers'}, scheduleReload)
     .on('postgres_changes', {event:'*', schema:'public', table:'case_logs'}, scheduleReload)
     .on('postgres_changes', {event:'*', schema:'public', table:'profiles'}, scheduleReload)
+    .on('postgres_changes', {event:'*', schema:'public', table:'case_status_history'}, scheduleReload)
+    .on('postgres_changes', {event:'*', schema:'public', table:'app_settings'}, scheduleReload)
     .subscribe(status=>{
       const ok = status==='SUBSCRIBED';
       live.classList.toggle('off', !ok);
@@ -528,7 +547,7 @@ function render(){
   // ไม่วาดหน้าใหม่ทับขณะผู้ใช้กำลังพิมพ์ในช่องค้นหา (กันเคอร์เซอร์หลุดตอนข้อมูลเรียลไทม์เข้า)
   const focused = document.activeElement;
   const keep = focused && focused.id && $('#view').contains(focused) ? {id:focused.id, pos:focused.selectionStart} : null;
-  ({overall:renderOverall, projects: view.customerId?renderProject:renderProjects, dashboard:renderDashboard, users:renderUsers})[view.page]();
+  ({overall:renderOverall, projects: view.customerId?renderProject:renderProjects, dashboard:renderDashboard, performance:renderPerformance, users:renderUsers})[view.page]();
   if(keep){ const el=document.getElementById(keep.id); if(el){ el.focus(); try{ el.setSelectionRange(keep.pos,keep.pos); }catch(e){} } }
 }
 function head(eyebrow, title, desc){
@@ -683,6 +702,299 @@ function renderOverall(){
 }
 
 /* ============ EXPORT POWERPOINT (Template Std · SCG Home Experience) ============ */
+function assigneeOptions(cur){
+  const users = DB.users.filter(u=>u.role!=='pending' && u.name);
+  const legacy = cur && !users.some(u=>u.name===cur) ? `<option value="${esc(cur)}" selected>${esc(cur)} (ชื่อเดิม)</option>` : '';
+  return `<option value="">— ยังไม่มอบหมาย —</option>${legacy}${users.map(u=>`<option value="${esc(u.name)}" ${u.name===cur?'selected':''}>${esc(u.name)} · ${esc(ROLES[u.role]?.label||u.role)}</option>`).join('')}`;
+}
+const assigneeIdOf = name => DB.users.find(u=>u.name===name)?.id || null;
+/* ============ PERFORMANCE (ประเมินการทำงานของทีม AFS) ============ */
+// เกณฑ์เริ่มต้น (Admin แก้ได้ในหน้า Performance → ตั้งค่าเกณฑ์) · lower = ค่าน้อยยิ่งดี
+const PERF_DEFAULT = {
+  visitOnTime:{good:90, warn:75}, closeOnTime:{good:85, warn:70}, rework:{good:10, warn:20, lower:true},
+  rejected:{good:10, warn:25, lower:true}, reasonDone:{good:90, warn:70}, signed:{good:90, warn:70},
+  stale:{good:0, warn:2, lower:true}, staleDays:7,
+};
+// การจัดกลุ่มสาเหตุเกินกำหนด: ctrl = ทีมควบคุมได้, unctrl = ปัจจัยภายนอก
+const REASON_GROUP_DEFAULT = {
+  'รออะไหล่ / วัสดุ':'unctrl', 'รอผู้รับเหมาเข้าหน้างาน':'ctrl', 'ลูกค้าไม่สะดวกนัดหมาย':'unctrl', 'รออนุมัติค่าใช้จ่าย / งบประมาณ':'unctrl',
+  'รอตรวจสอบหาสาเหตุเพิ่มเติม':'ctrl', 'ต้องแก้ซ้ำ (Rework)':'ctrl', 'สภาพอากาศ / ฝนตก':'unctrl', 'รอประสานงานหลายฝ่าย':'ctrl',
+};
+const perfCfg = () => ({...PERF_DEFAULT, ...(DB.settings?.perf||{})});
+const reasonGroups = () => ({...REASON_GROUP_DEFAULT, ...(DB.settings?.reasonGroups||{})});
+const AGE_BUCKETS = [{label:'0–7 วัน', max:7, color:'#FBD3AE'}, {label:'8–14 วัน', max:14, color:'#F4A261'}, {label:'15–30 วัน', max:30, color:'#D9661F'}, {label:'มากกว่า 30 วัน', max:1e9, color:'#8A3A0E'}];
+const STAGE_KEYS = ['new','assigned','verifycase','progress','verify','rework','confirm'];
+
+function personKey(c){ return c.assigneeId || (c.assignee ? 'name:'+c.assignee.trim().toLowerCase() : 'none'); }
+function personName(key, c){
+  if(key==='none') return 'ไม่ระบุผู้รับผิดชอบ';
+  const u = DB.users.find(x=>x.id===key); return u ? u.name : (c?.assignee || key.replace(/^name:/,''));
+}
+const pctTxt = v => v==null ? '—' : Math.round(v)+'%';
+const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null;
+const dayTxt = v => v==null ? '—' : (Math.round(v*10)/10).toLocaleString('th-TH')+' วัน';
+function grade(key, v){
+  if(v==null) return 'na';
+  const t=perfCfg()[key]; if(!t) return 'na';
+  return t.lower ? (v<=t.good?'good':v<=t.warn?'warn':'bad') : (v>=t.good?'good':v>=t.warn?'warn':'bad');
+}
+function lastActivity(c){
+  const ts=[...(DB.logs[c.id]||[]).map(l=>l.ts), ...((DB.history||{})[c.id]||[]).map(h=>h.at), c.openedAt+'T00:00:00'];
+  return ts.sort().pop();
+}
+function caseMetrics(c){
+  const t=todayISO();
+  const visitOn = c.visitDue ? (c.visitedAt ? (c.visitedAt<=c.visitDue) : (isOpen(c) && c.visitDue<t ? false : null)) : null;
+  const closeOn = c.dueAt ? (!isOpen(c) ? (c.closedAt<=c.dueAt) : (c.dueAt<t ? false : null)) : null;
+  const logs = DB.logs[c.id]||[];
+  const req = logs.filter(l=>/^🔔 ขอปิดเคส/.test(l.text)).length, rej = logs.filter(l=>/^❌ ไม่อนุมัติปิดเคส/.test(l.text)).length;
+  const staleDays = isOpen(c) ? daysBetween(lastActivity(c).slice(0,10), t) : 0;
+  return { visitOn, closeOn, visitDays: c.visitedAt ? daysBetween(c.openedAt, c.visitedAt) : null,
+    closeDays: !isOpen(c) && c.closedAt ? daysBetween(c.openedAt, c.closedAt) : null, req, rej, staleDays,
+    overdue: isOverdue(c), reasonDone: !!(c.delayReason && c.planFinish), signed: !!c.handover?.signedAt };
+}
+function perfRows(list){
+  const cfg=perfCfg(), groups={};
+  list.forEach(c=>{ const k=personKey(c); (groups[k] ||= {key:k, name:personName(k,c), cases:[]}).cases.push(c); });
+  const calc = (key,name,cases) => {
+    const m = cases.map(c=>({c, ...caseMetrics(c)}));
+    const vs=m.filter(x=>x.visitOn!=null), cl=m.filter(x=>x.closeOn!=null), closed=m.filter(x=>!isOpen(x.c)), od=m.filter(x=>x.overdue);
+    const req=m.reduce((a,x)=>a+x.req,0), rej=m.reduce((a,x)=>a+x.rej,0);
+    return { key, name, cases, m, total:cases.length, closed:closed.length, open:cases.length-closed.length,
+      visitOnTime: vs.length ? vs.filter(x=>x.visitOn).length/vs.length*100 : null, visitN:vs.length,
+      avgVisit: avg(m.filter(x=>x.visitDays!=null).map(x=>x.visitDays)),
+      closeOnTime: cl.length ? cl.filter(x=>x.closeOn).length/cl.length*100 : null, closeN:cl.length,
+      avgClose: avg(m.filter(x=>x.closeDays!=null).map(x=>x.closeDays)),
+      rework: cases.length ? cases.filter(c=>c.rework>0).length/cases.length*100 : null,
+      rejected: req ? rej/req*100 : null, req, rej,
+      reasonDone: od.length ? od.filter(x=>x.reasonDone).length/od.length*100 : null, overdueN:od.length,
+      signed: closed.length ? closed.filter(x=>x.signed).length/closed.length*100 : null,
+      stale: m.filter(x=>isOpen(x.c) && x.staleDays>cfg.staleDays).length };
+  };
+  const rows = Object.values(groups).map(g=>calc(g.key,g.name,g.cases)).sort((a,b)=>b.total-a.total||a.name.localeCompare(b.name,'th'));
+  rows.forEach((r,i)=>r.color = r.key==='none' ? '#9CA3AF' : SERIES[i % SERIES.length]);
+  return { rows, team: calc('team','รวมทั้งทีม',list) };
+}
+
+/* ---------- chart helpers (SVG / HTML) ---------- */
+function legendHTML(items){ return `<div class="pf-legend">${items.map(i=>`<span><i style="background:${i.color}"></i>${esc(i.name)}</span>`).join('')}</div>`; }
+function columnChart(cats, series, {stacked=true, unit='เคส'}={}){
+  const W=640,H=240,P={l:34,r:8,t:12,b:34}, iw=W-P.l-P.r, ih=H-P.t-P.b;
+  const tot = cats.map((_,i)=>stacked ? series.reduce((a,s)=>a+(s.values[i]||0),0) : Math.max(0,...series.map(s=>s.values[i]||0)));
+  const max = Math.max(1, ...tot), step = Math.max(1, Math.ceil(max/4));
+  const top = step*Math.ceil(max/step), bw = Math.min(46, iw/cats.length*0.62), y = v=>P.t+ih-v/top*ih;
+  let g=''; for(let v=0; v<=top; v+=step) g+=`<line x1="${P.l}" x2="${W-P.r}" y1="${y(v)}" y2="${y(v)}" class="pf-grid"/><text x="${P.l-6}" y="${y(v)+4}" class="pf-ax" text-anchor="end">${v}</text>`;
+  let bars='';
+  cats.forEach((cat,i)=>{ const cx=P.l+iw*(i+0.5)/cats.length; let acc=0;
+    series.forEach(s=>{ const v=s.values[i]||0; if(!v) return; const y0=y(acc), y1=y(acc+v), h=Math.max(0,y0-y1-2);
+      bars+=`<rect x="${cx-bw/2}" y="${y1}" width="${bw}" height="${h}" rx="3" fill="${s.color}"><title>${esc(cat)} · ${esc(s.name)}: ${v} ${unit}</title></rect>`; acc+=v; });
+    if(tot[i]) bars+=`<text x="${cx}" y="${y(tot[i])-5}" class="pf-val" text-anchor="middle">${tot[i]}</text>`;
+    bars+=`<text x="${cx}" y="${H-12}" class="pf-ax" text-anchor="middle">${esc(cat)}</text>`; });
+  return `<svg viewBox="0 0 ${W} ${H}" class="pf-svg" role="img">${g}${bars}</svg>`;
+}
+function lineChart(cats, series, {unit='วัน'}={}){
+  const W=640,H=240,P={l:34,r:12,t:14,b:34}, iw=W-P.l-P.r, ih=H-P.t-P.b;
+  const vals=series.flatMap(s=>s.values.filter(v=>v!=null)); const max=Math.max(1,...vals), step=Math.max(1,Math.ceil(max/4)), top=step*Math.ceil(max/step);
+  const x=i=>P.l+(cats.length<2?iw/2:iw*i/(cats.length-1)), y=v=>P.t+ih-v/top*ih;
+  let g=''; for(let v=0; v<=top; v+=step) g+=`<line x1="${P.l}" x2="${W-P.r}" y1="${y(v)}" y2="${y(v)}" class="pf-grid"/><text x="${P.l-6}" y="${y(v)+4}" class="pf-ax" text-anchor="end">${v}</text>`;
+  cats.forEach((c,i)=>g+=`<text x="${x(i)}" y="${H-12}" class="pf-ax" text-anchor="middle">${esc(c)}</text>`);
+  const lines = series.map(s=>{ let d='', pen=false;
+    s.values.forEach((v,i)=>{ if(v==null){ pen=false; return; } d+=(pen?'L':'M')+x(i)+','+y(v)+' '; pen=true; });
+    return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round"/>` +
+      s.values.map((v,i)=>v==null?'':`<circle cx="${x(i)}" cy="${y(v)}" r="4.5" fill="${s.color}" stroke="var(--panel)" stroke-width="2"><title>${esc(cats[i])} · ${esc(s.name)}: ${dayTxt(v)}</title></circle>`).join(''); }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" class="pf-svg" role="img">${g}${lines}</svg>`;
+}
+function hStack(rows){ // rows: [{label, parts:[{name,color,n}]}]
+  const max=Math.max(1,...rows.map(r=>r.parts.reduce((a,p)=>a+p.n,0)));
+  return `<div class="pf-hs">${rows.map(r=>{ const t=r.parts.reduce((a,p)=>a+p.n,0);
+    return `<div class="pf-hs-row"><span class="pf-hs-l" title="${esc(r.label)}">${esc(r.label)}</span><div class="pf-hs-bar">${r.parts.filter(p=>p.n).map(p=>`<i style="width:${p.n/max*100}%;background:${p.color}" title="${esc(r.label)} · ${esc(p.name)}: ${p.n} เคส"></i>`).join('')}</div><b>${t}</b></div>`; }).join('') || '<div class="empty">ไม่มีข้อมูล</div>'}</div>`;
+}
+function monthsWindow(){
+  const end = dateRange.to ? new Date(dateRange.to+'T00:00:00') : new Date();
+  let start = dateRange.from ? new Date(dateRange.from+'T00:00:00') : new Date(end.getFullYear(), end.getMonth()-5, 1);
+  const out=[]; let d=new Date(start.getFullYear(), start.getMonth(), 1);
+  while(d<=end && out.length<12){ out.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`); d=new Date(d.getFullYear(), d.getMonth()+1, 1); }
+  return out.slice(-12);
+}
+const monthLabelTH = ym => new Date(ym+'-01T00:00:00').toLocaleDateString('th-TH',{month:'short',year:'2-digit'});
+function stageDurations(list){
+  const ids=new Set(list.map(c=>c.id)), acc={};
+  Object.entries(DB.history||{}).forEach(([cid,hs])=>{ if(!ids.has(cid)) return;
+    hs.forEach((h,i)=>{ const next=hs[i+1]; if(!next) return; const d=(new Date(next.at)-new Date(h.at))/864e5; (acc[h.to] ||= []).push(d); }); });
+  return STAGE_KEYS.map(k=>({k, label:st(k).label, color:st(k).color, n:(acc[k]||[]).length, avg:avg(acc[k]||[])})).filter(x=>x.n);
+}
+function perfData(){
+  const S = overallStats(); // ใช้ตัวกรองช่วงวันที่ + In/Out warranty ชุดเดียวกับหน้า Overall
+  const list = S.list; const P = perfRows(list);
+  const people = P.rows;
+  // 2) แนวโน้มรายเดือน (นับตามเดือนที่ปิดเคส) จากเคสในขอบเขต warranty เดียวกัน (ไม่จำกัดวันที่แจ้ง)
+  const scoped = DB.cases.filter(c=> S.scope==='in'?/^in/i.test(c.warranty): S.scope==='out'?/^out/i.test(c.warranty): true);
+  const months = monthsWindow();
+  const closedIn = (k,ym) => scoped.filter(c=>!isOpen(c) && (c.closedAt||'').startsWith(ym) && personKey(c)===k);
+  const colorOf = k => people.find(p=>p.key===k)?.color || '#9CA3AF';
+  const trendKeys = [...new Set([...people.map(p=>p.key), ...scoped.filter(c=>!isOpen(c) && months.some(m=>(c.closedAt||'').startsWith(m))).map(personKey)])];
+  const trendSeries = trendKeys.map(k=>({key:k, name:personName(k, scoped.find(c=>personKey(c)===k)), color:colorOf(k),
+    closed: months.map(m=>closedIn(k,m).length),
+    days: months.map(m=>{ const cs=closedIn(k,m); return cs.length ? avg(cs.map(c=>daysBetween(c.openedAt,c.closedAt))) : null; }) }));
+  // 3) Aging
+  const t=todayISO();
+  const aging = people.map(p=>({label:p.name, color:p.color, parts:AGE_BUCKETS.map((b,i)=>({name:b.label, color:b.color,
+    n:p.cases.filter(c=>isOpen(c)).filter(c=>{ const a=daysBetween(c.openedAt,t), lo=i?AGE_BUCKETS[i-1].max:-1; return a>lo && a<=b.max; }).length}))}));
+  // 4) สาเหตุเกินกำหนด
+  const RG = reasonGroups();
+  const delayCases = list.filter(c=>c.delayReason || isOverdue(c));
+  const grp = c => !c.delayReason ? 'none' : (RG[c.delayReason] || 'unset');
+  const DG = [{k:'ctrl',name:'ทีมควบคุมได้',color:'#EB6834'},{k:'unctrl',name:'ปัจจัยภายนอก',color:'#2A78D6'},{k:'unset',name:'ยังไม่จัดกลุ่ม',color:'#A78BFA'},{k:'none',name:'ยังไม่ระบุสาเหตุ',color:'#C7CBD1'}];
+  const delayByPerson = people.map(p=>({label:p.name, parts:DG.map(g=>({name:g.name, color:g.color, n:p.cases.filter(c=>delayCases.includes(c) && grp(c)===g.k).length}))})).filter(r=>r.parts.some(x=>x.n));
+  const reasonCount = {}; delayCases.forEach(c=>{ const r=c.delayReason||'(ยังไม่ระบุ)'; reasonCount[r]=(reasonCount[r]||0)+1; });
+  const reasons = Object.entries(reasonCount).sort((a,b)=>b[1]-a[1]).map(([r,n])=>({r, n, g: r==='(ยังไม่ระบุ)'?'none':(RG[r]||'unset')}));
+  return { S, list, people, team:P.team, months, trendSeries, aging, DG, delayByPerson, reasons, stages:stageDurations(list) };
+}
+
+function renderPerformance(){
+  const D = perfData(), cfg = perfCfg(), {S} = D;
+  const cell = (key, v, txt, sub) => `<td class="pf-c ${grade(key,v)}">${txt}${sub?`<div class="sub">${sub}</div>`:''}</td>`;
+  const row = (r, isTeam) => `<tr class="${isTeam?'pf-team':''}" ${isTeam?'':`data-person="${esc(r.key)}"`}>
+    <td style="min-width:170px">${isTeam?'':`<i class="pf-dot" style="background:${r.color}"></i>`}<b>${esc(r.name)}</b></td>
+    <td class="num">${r.total}</td><td class="num">${r.closed}</td><td class="num">${r.open}</td>
+    ${cell('visitOnTime', r.visitOnTime, pctTxt(r.visitOnTime), r.visitN?r.visitN+' เคส':'')}
+    <td class="num">${dayTxt(r.avgVisit)}</td>
+    ${cell('closeOnTime', r.closeOnTime, pctTxt(r.closeOnTime), r.closeN?r.closeN+' เคส':'')}
+    <td class="num">${dayTxt(r.avgClose)}</td>
+    ${cell('rework', r.rework, pctTxt(r.rework))}
+    ${cell('rejected', r.rejected, pctTxt(r.rejected), r.req?`${r.rej}/${r.req} คำขอ`:'')}
+    ${cell('reasonDone', r.reasonDone, pctTxt(r.reasonDone), r.overdueN?r.overdueN+' เคสเกิน':'')}
+    ${cell('signed', r.signed, pctTxt(r.signed))}
+    ${cell('stale', r.stale, r.stale+' เคส')}
+  </tr>`;
+  const trendCats = D.months.map(monthLabelTH);
+  $('#view').innerHTML = `<div class="page-head"><div><div class="eyebrow">${I.pin} ประเมินการทำงานทีม AFS</div><h1>Performance</h1><p>วัดความเร็ว คุณภาพ และวินัยการปิดเคส รายบุคคล</p></div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><select class="scope-sel" onchange="overallScope=this.value;try{localStorage.setItem('afs-overall-scope',this.value)}catch(e){};renderPerformance()">${Object.entries(SCOPES).map(([k,v])=>`<option value="${k}" ${k===S.scope?'selected':''}>${v.label}</option>`).join('')}</select>
+    ${can('users')?`<button class="btn" onclick="openPerfSettings()">⚙️ ตั้งค่าเกณฑ์</button>`:''}
+    <button class="btn" id="btn-perf-pptx" onclick="exportPerfPptx()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg> Export PowerPoint</button>
+    <div class="today">ข้อมูล ณ ${thDateLong()}</div></div></div>
+  ${dateBar()}
+  <div class="panel" style="margin-bottom:14px">
+    <div class="records-head" style="margin-bottom:8px"><div><h3>1 · Scorecard รายบุคคล</h3><p class="sub">${esc(S.scopeLabel)} · เคสที่แจ้งช่วง ${rangeLabel()} · คลิกชื่อเพื่อดูเคสของคนนั้น</p></div>
+      <div class="pf-key"><span class="pf-c good">ผ่านเกณฑ์</span><span class="pf-c warn">เฝ้าระวัง</span><span class="pf-c bad">ต่ำกว่าเกณฑ์</span><span class="pf-c na">ไม่มีข้อมูล</span></div></div>
+    <div class="table-wrap"><table class="pf-table"><thead><tr><th>ผู้รับผิดชอบ</th><th class="num">เคส</th><th class="num">ปิด</th><th class="num">ค้าง</th>
+      <th title="เข้าแก้ภายใน SLA เข้าแก้ · เกณฑ์ ≥${cfg.visitOnTime.good}%">เข้าแก้ทัน SLA</th><th>เฉลี่ยจนเข้าแก้</th>
+      <th title="ปิดภายในกำหนดปิด · เกณฑ์ ≥${cfg.closeOnTime.good}%">ปิดทันกำหนด</th><th>เฉลี่ยจนปิด</th>
+      <th title="เคสที่ต้องแก้ซ้ำ · เกณฑ์ ≤${cfg.rework.good}%">Rework</th><th title="คำขอปิดที่ถูกตีกลับ · เกณฑ์ ≤${cfg.rejected.good}%">ถูกตีกลับ</th>
+      <th title="เคสเกินกำหนดที่ระบุสาเหตุ+แผนครบ · เกณฑ์ ≥${cfg.reasonDone.good}%">ระบุสาเหตุครบ</th><th title="เคสปิดที่มีลายเซ็นลูกค้า · เกณฑ์ ≥${cfg.signed.good}%">มีลายเซ็นลูกค้า</th>
+      <th title="เคสค้างที่ไม่มีการอัปเดตเกิน ${cfg.staleDays} วัน">ไม่อัปเดต &gt;${cfg.staleDays} วัน</th></tr></thead>
+      <tbody>${D.people.map(r=>row(r)).join('') || `<tr><td colspan="13" class="empty">ไม่มีเคสในช่วงที่เลือก</td></tr>`}${D.people.length>1?row(D.team,true):''}</tbody></table></div>
+    <p class="sub" style="margin:8px 0 0">วิธีนับ: “เข้าแก้ทัน SLA / ปิดทันกำหนด” นับเฉพาะเคสที่ครบกำหนดแล้วหรือทำเสร็จแล้ว · “เฉลี่ยจน…” นับจากวันที่ได้รับแจ้ง · ตัวเลขใช้ประกอบการโค้ชงาน ควรดูคู่กับสาเหตุในข้อ 4</p>
+  </div>
+  <div class="grid-2">
+    <div class="panel"><h3>2 · เคสที่ปิดต่อเดือน</h3><p class="sub">นับตามเดือนที่ปิดเคส · ${esc(S.scopeLabel)}</p>${columnChart(trendCats, D.trendSeries.map(s=>({name:s.name,color:s.color,values:s.closed})))}${legendHTML(D.trendSeries)}</div>
+    <div class="panel"><h3>2 · จำนวนวันเฉลี่ยจนปิดเคส</h3><p class="sub">ยิ่งต่ำยิ่งดี · จุดที่ขาดคือเดือนที่ไม่มีเคสปิด</p>${lineChart(trendCats, D.trendSeries.map(s=>({name:s.name,color:s.color,values:s.days})))}${legendHTML(D.trendSeries)}</div>
+  </div>
+  <div class="grid-2">
+    <div class="panel"><h3>3 · อายุเคสที่ยังค้าง (Aging)</h3><p class="sub">นับจากวันที่ได้รับแจ้งถึงวันนี้</p>${hStack(D.aging.filter(r=>r.parts.some(p=>p.n)))}${legendHTML(AGE_BUCKETS.map(b=>({name:b.label,color:b.color})))}</div>
+    <div class="panel"><h3>4 · สาเหตุที่เกินกำหนด: ควบคุมได้ vs ปัจจัยภายนอก</h3><p class="sub">เคสที่เกินกำหนดหรือเคยระบุสาเหตุ · ใช้ประเมินอย่างเป็นธรรม</p>${hStack(D.delayByPerson)}${legendHTML(D.DG)}
+      ${D.reasons.length?`<div class="table-wrap" style="margin-top:10px"><table><thead><tr><th>สาเหตุ</th><th class="num">เคส</th><th>กลุ่ม</th></tr></thead><tbody>${D.reasons.map(x=>`<tr style="cursor:default"><td>${esc(x.r)}</td><td class="num">${x.n}</td><td>${x.g==='none'?'<span class="sub">—</span>':`${can('users')?`<select class="role-sel" data-reason="${esc(x.r)}"><option value="ctrl" ${x.g==='ctrl'?'selected':''}>ทีมควบคุมได้</option><option value="unctrl" ${x.g==='unctrl'?'selected':''}>ปัจจัยภายนอก</option><option value="unset" ${x.g==='unset'?'selected':''}>ยังไม่จัดกลุ่ม</option></select>`:esc(D.DG.find(g=>g.k===x.g).name)}`}</td></tr>`).join('')}</tbody></table></div>`:''}
+    </div>
+  </div>
+  <div class="panel" style="margin-top:14px"><h3>เวลาเฉลี่ยที่เคสอยู่ในแต่ละขั้น</h3><p class="sub">จากประวัติการเปลี่ยนสถานะ (เริ่มบันทึก 10 พ.ย. 69) · ช่วยหาว่างานติดขั้นไหนนานที่สุด</p>
+    ${D.stages.length?hStack(D.stages.map(s=>({label:s.label, parts:[{name:'วันเฉลี่ย', color:s.color, n:Math.round(s.avg*10)/10}]}))).replace(/<b>([\d.]+)<\/b>/g,'<b>$1 วัน</b>'):'<div class="empty">ยังไม่มีข้อมูลพอ — จะเริ่มแสดงเมื่อเคสเปลี่ยนสถานะตั้งแต่ 10 พ.ย. 69 เป็นต้นไป</div>'}</div>`;
+  bindDateBar();
+  document.querySelectorAll('tr[data-person]').forEach(tr=>tr.onclick=()=>openPersonCases(tr.dataset.person));
+  document.querySelectorAll('select[data-reason]').forEach(s=>s.onchange=()=>saveSettings('reasonGroups', {...(DB.settings?.reasonGroups||{}), [s.dataset.reason]:s.value}));
+}
+function openPersonCases(key){
+  const D=perfData(), p=D.people.find(x=>x.key===key); if(!p) return;
+  const yn = v => v==null?'<span class="sub">—</span>':v?'<span class="badge b-green">ทัน</span>':'<span class="badge b-red">ไม่ทัน</span>';
+  modal(`<button class="x" onclick="closeAll()">×</button><h2>${esc(p.name)}</h2><p class="sub">${p.total} เคส · ปิด ${p.closed} · ค้าง ${p.open} · ${esc(D.S.scopeLabel)} · ${rangeLabel()}</p>
+  <div class="table-wrap" style="margin-top:12px;max-height:60vh;overflow:auto"><table><thead><tr><th>เคส</th><th>สถานะ</th><th>เข้าแก้</th><th>ปิด</th><th class="num">วันจนปิด</th><th>Rework</th><th>ลายเซ็น</th><th>สาเหตุเกินกำหนด</th></tr></thead><tbody>
+  ${p.m.sort((a,b)=>(b.c.openedAt||'').localeCompare(a.c.openedAt||'')).map(x=>`<tr data-case="${x.c.id}"><td><b>${esc(x.c.title)}</b><div class="sub">${esc(customer(x.c.customerId).name)} · <span class="mono">${esc(x.c.refCaseId||x.c.code)}</span> · แจ้ง ${thDate(x.c.openedAt)}</div></td>
+    <td>${badge(st(x.c.status))}</td><td>${yn(x.visitOn)}</td><td>${yn(x.closeOn)}</td><td class="num">${x.closeDays??'—'}</td><td>${x.c.rework?`<span class="badge b-red">×${x.c.rework}</span>`:'—'}</td>
+    <td>${isOpen(x.c)?'—':x.signed?'✍️':'<span class="sub">ไม่มี</span>'}</td><td>${x.c.delayReason?esc(x.c.delayReason):x.overdue?'<span class="overdue">ยังไม่ระบุ</span>':'—'}</td></tr>`).join('')}</tbody></table></div>`);
+  $('#modal').style.width='min(1000px, calc(100vw - 32px))';
+  document.querySelectorAll('#modal tr[data-case]').forEach(r=>r.onclick=()=>{ closeAll(); openCase(r.dataset.case); });
+}
+async function saveSettings(key, value){
+  await q(sb.from('app_settings').upsert({key, value, updated_at:new Date().toISOString(), updated_by:me().name||me().email}), 'บันทึกการตั้งค่า');
+  DB.settings = {...(DB.settings||{}), [key]:value}; toast('บันทึกการตั้งค่าแล้ว'); render();
+}
+function openPerfSettings(){
+  const c=perfCfg(), L={visitOnTime:'เข้าแก้ทัน SLA (%)', closeOnTime:'ปิดทันกำหนด (%)', rework:'Rework (%) · น้อยยิ่งดี', rejected:'คำขอปิดถูกตีกลับ (%) · น้อยยิ่งดี', reasonDone:'ระบุสาเหตุเกินกำหนดครบ (%)', signed:'มีลายเซ็นลูกค้า (%)', stale:'เคสไม่อัปเดต (เคส) · น้อยยิ่งดี'};
+  modal(`<button class="x" onclick="closeAll()">×</button><h2>ตั้งค่าเกณฑ์ Performance</h2><p class="sub">“ผ่านเกณฑ์” = สีเขียว · “เฝ้าระวัง” = สีเหลือง · ที่เหลือ = สีแดง · ใช้ร่วมกันทุกคนในทีม</p>
+  <form class="form" id="pff">${Object.entries(L).map(([k,l])=>`<label class="full" style="flex-direction:row;align-items:center;gap:10px"><span style="flex:1">${l}</span>
+    ผ่านเกณฑ์ ${c[k].lower?'≤':'≥'} <input type="number" name="${k}_good" value="${c[k].good}" style="width:80px"> เฝ้าระวัง ${c[k].lower?'≤':'≥'} <input type="number" name="${k}_warn" value="${c[k].warn}" style="width:80px"></label>`).join('')}
+    <label class="full" style="flex-direction:row;align-items:center;gap:10px"><span style="flex:1">นับว่า “ไม่อัปเดต” เมื่อไม่มีความเคลื่อนไหวเกิน (วัน)</span><input type="number" name="staleDays" value="${c.staleDays}" style="width:80px"></label>
+    <div class="actions full"><button type="button" class="btn" onclick="saveSettings('perf', {});closeAll()" style="margin-right:auto">คืนค่าเริ่มต้น</button><button type="button" class="btn" onclick="closeAll()">ยกเลิก</button><button class="btn primary">บันทึก</button></div></form>`);
+  $('#pff').onsubmit=async e=>{ e.preventDefault(); const d=Object.fromEntries(new FormData(e.target)), v={staleDays:Number(d.staleDays)||7};
+    Object.keys(L).forEach(k=>v[k]={good:Number(d[k+'_good']), warn:Number(d[k+'_warn']), lower:!!PERF_DEFAULT[k].lower});
+    closeAll(); await saveSettings('perf', v); };
+}
+
+/* ---------- Export PowerPoint (Template Std) ---------- */
+async function exportPerfPptx(){
+  const btn=$('#btn-perf-pptx'); busy(btn,true); if(btn) btn.textContent='กำลังสร้างไฟล์…';
+  try{
+    await loadScript('assets/pptxgen.bundle.js'); await loadScript('assets/brand.js');
+    const B=window.AFS_BRAND, D=perfData(), cfg=perfCfg();
+    const RED='C00000', INK='262626', MUTED='6B7280', LINE='E5E7EB', FONT='SCG', hx=c=>c.replace('#','').toUpperCase();
+    const GC={good:'DCF5EC', warn:'FEF3C7', bad:'FDE4E4', na:'F3F4F6'};
+    const pres=new PptxGenJS(); pres.layout='LAYOUT_WIDE'; pres.title='Aftersale Service – Performance'; pres.author=me().name||'Aftersale Service'; pres.company='SCG Home Experience';
+    pres.theme={headFontFace:FONT, bodyFontFace:FONT};
+    pres.defineSlideMaster({ title:'AFS_COVER', background:{data:B.cover},
+      objects:[{placeholder:{options:{name:'title',type:'title',x:5.6,y:3.0,w:6.4,h:0.8,fontFace:FONT,fontSize:36,bold:true,color:'1F1F1F',align:'center',valign:'middle'},text:''}},
+               {placeholder:{options:{name:'subtitle',type:'body',x:5.6,y:3.8,w:6.4,h:0.5,fontFace:FONT,fontSize:20,bold:true,color:RED,align:'center',valign:'middle'},text:''}}]});
+    pres.defineSlideMaster({ title:'AFS_CONTENT', background:{color:'FFFFFF'},
+      objects:[{image:{x:10.05,y:5.25,w:3.29,h:2.25,data:B.corner}},{image:{x:12.62,y:0.13,w:0.5,h:0.49,data:B.logo}},
+               {placeholder:{options:{name:'title',type:'title',x:0.12,y:0.03,w:9,h:0.34,fontFace:FONT,fontSize:20,bold:true,color:RED,margin:0,valign:'middle',align:'left'},text:''}},
+               {placeholder:{options:{name:'subtitle',type:'body',x:0.12,y:0.32,w:9,h:0.38,fontFace:FONT,fontSize:16,bold:true,color:INK,margin:0,valign:'middle',align:'left'},text:''}}],
+      slideNumber:{x:12.7,y:7.1,w:0.5,h:0.3,fontFace:FONT,fontSize:9,color:MUTED}});
+    const sub = `${D.S.scopeLabel} · เคสที่แจ้งช่วง ${rangeLabel()}  |  ข้อมูล ณ ${thDateLong()}`;
+    let sl=pres.addSlide({masterName:'AFS_COVER'}); sl.addText('AFS Performance',{placeholder:'title'}); sl.addText('ประเมินการปิดเคสรายบุคคล – '+rangeLabel(),{placeholder:'subtitle'});
+    // 1) Scorecard
+    sl=pres.addSlide({masterName:'AFS_CONTENT'}); sl.addText('PERFORMANCE SCORECARD',{placeholder:'title'}); sl.addText(sub,{placeholder:'subtitle'});
+    const H=['ผู้รับผิดชอบ','เคส','ปิด','ค้าง','เข้าแก้ทัน SLA','เฉลี่ยจนเข้าแก้','ปิดทันกำหนด','เฉลี่ยจนปิด','Rework','ถูกตีกลับ','ระบุสาเหตุครบ','มีลายเซ็น','ไม่อัปเดต>'+cfg.staleDays+'วัน']
+      .map(t=>({text:t,options:{bold:true,color:'FFFFFF',fill:{color:RED},align:'center'}}));
+    const gcell=(k,v,t)=>({text:t,options:{align:'center',fill:{color:GC[grade(k,v)]}}});
+    const body=[...D.people, ...(D.people.length>1?[D.team]:[])].map(r=>[{text:r.name,options:{bold:r.key==='team'}},{text:String(r.total),options:{align:'center'}},{text:String(r.closed),options:{align:'center'}},{text:String(r.open),options:{align:'center'}},
+      gcell('visitOnTime',r.visitOnTime,pctTxt(r.visitOnTime)),{text:dayTxt(r.avgVisit),options:{align:'center'}},gcell('closeOnTime',r.closeOnTime,pctTxt(r.closeOnTime)),{text:dayTxt(r.avgClose),options:{align:'center'}},
+      gcell('rework',r.rework,pctTxt(r.rework)),gcell('rejected',r.rejected,pctTxt(r.rejected)),gcell('reasonDone',r.reasonDone,pctTxt(r.reasonDone)),gcell('signed',r.signed,pctTxt(r.signed)),gcell('stale',r.stale,r.stale+' เคส')]);
+    sl.addTable([H,...body],{x:0.3,y:0.95,w:12.7,colW:[2.2,0.6,0.6,0.6,1.05,1.0,1.05,1.0,0.85,0.9,1.05,0.9,0.9],fontFace:FONT,fontSize:10,color:INK,valign:'middle',
+      border:{type:'solid',pt:0.5,color:LINE},margin:[0.03,0.05,0.03,0.05],autoPage:true,autoPageRepeatHeader:true,autoPageSlideStartY:0.95,newSlideStartY:0.95,masterName:'AFS_CONTENT'});
+    sl.addText('เขียว = ผ่านเกณฑ์ · เหลือง = เฝ้าระวัง · แดง = ต่ำกว่าเกณฑ์ · เทา = ไม่มีข้อมูล',{x:0.3,y:6.9,w:9,h:0.3,fontFace:FONT,fontSize:9,color:MUTED,margin:0,isTextBox:true});
+    // 2) Trend
+    const cats=D.months.map(monthLabelTH), TS=D.trendSeries;
+    sl=pres.addSlide({masterName:'AFS_CONTENT'}); sl.addText('MONTHLY TREND',{placeholder:'title'}); sl.addText(D.S.scopeLabel+' · นับตามเดือนที่ปิดเคส',{placeholder:'subtitle'});
+    if(TS.length){
+      sl.addChart(pres.charts.BAR, TS.map(s=>({name:s.name,labels:cats,values:s.closed})), {x:0.3,y:0.95,w:6.2,h:5.6,barDir:'col',barGrouping:'stacked',chartColors:TS.map(s=>hx(s.color)),
+        showTitle:true,title:'เคสที่ปิดต่อเดือน',titleFontFace:'+mn-lt',titleFontSize:13,showLegend:true,legendPos:'b',legendFontFace:'+mn-lt',legendFontSize:10,
+        catAxisLabelFontFace:'+mn-lt',catAxisLabelFontSize:10,valAxisLabelFontFace:'+mn-lt',valAxisLabelFontSize:9,valGridLine:{color:'E5E7EB',size:0.5},catGridLine:{style:'none'},valAxisMinVal:0});
+      sl.addChart(pres.charts.LINE, TS.map(s=>({name:s.name,labels:cats,values:s.days.map(v=>v==null?null:Math.round(v*10)/10)})), {x:6.75,y:0.95,w:6.2,h:5.6,chartColors:TS.map(s=>hx(s.color)),lineSize:2,lineDataSymbol:'circle',lineDataSymbolSize:8,
+        showTitle:true,title:'จำนวนวันเฉลี่ยจนปิดเคส',titleFontFace:'+mn-lt',titleFontSize:13,showLegend:true,legendPos:'b',legendFontFace:'+mn-lt',legendFontSize:10,
+        catAxisLabelFontFace:'+mn-lt',catAxisLabelFontSize:10,valAxisLabelFontFace:'+mn-lt',valAxisLabelFontSize:9,valGridLine:{color:'E5E7EB',size:0.5},catGridLine:{style:'none'},valAxisMinVal:0,displayBlanksAs:'gap'});
+    }
+    // 3) Aging + 4) Delay reasons
+    const hbar=(rows,parts,x,title)=>{ if(!rows.length) return sl.addText(title+' · ไม่มีข้อมูล',{x,y:1.2,w:6,h:0.4,fontFace:FONT,fontSize:12,color:MUTED,isTextBox:true});
+      sl.addChart(pres.charts.BAR, parts.map((p,i)=>({name:p.name,labels:rows.map(r=>r.label),values:rows.map(r=>r.parts[i].n||null)})), {x,y:0.95,w:6.2,h:5.6,barDir:'bar',catAxisOrientation:'maxMin',barGrouping:'stacked',chartColors:parts.map(p=>hx(p.color)),
+        showTitle:true,title,titleFontFace:'+mn-lt',titleFontSize:13,showLegend:true,legendPos:'b',legendFontFace:'+mn-lt',legendFontSize:10,showValue:true,dataLabelPosition:'ctr',dataLabelFontSize:9,dataLabelFontFace:'+mn-lt',
+        catAxisLabelFontFace:'+mn-lt',catAxisLabelFontSize:10,valAxisHidden:true,valGridLine:{style:'none'},catGridLine:{style:'none'}}); };
+    sl=pres.addSlide({masterName:'AFS_CONTENT'}); sl.addText('AGING & DELAY REASONS',{placeholder:'title'}); sl.addText(sub,{placeholder:'subtitle'});
+    hbar(D.aging.filter(r=>r.parts.some(p=>p.n)), AGE_BUCKETS.map(b=>({name:b.label,color:b.color})), 0.3, 'อายุเคสที่ยังค้าง (Aging)');
+    hbar(D.delayByPerson, D.DG, 6.75, 'สาเหตุเกินกำหนด: ควบคุมได้ vs ภายนอก');
+    if(D.reasons.length){
+      sl=pres.addSlide({masterName:'AFS_CONTENT'}); sl.addText('DELAY REASONS',{placeholder:'title'}); sl.addText(sub,{placeholder:'subtitle'});
+      sl.addTable([[{text:'สาเหตุ',options:{bold:true,color:'FFFFFF',fill:{color:RED}}},{text:'จำนวนเคส',options:{bold:true,color:'FFFFFF',fill:{color:RED},align:'center'}},{text:'กลุ่ม',options:{bold:true,color:'FFFFFF',fill:{color:RED}}}],
+        ...D.reasons.map(x=>[{text:x.r},{text:String(x.n),options:{align:'center'}},{text:x.g==='none'?'—':D.DG.find(g=>g.k===x.g).name}])],
+        {x:0.3,y:0.95,w:8,colW:[4.6,1.4,2.0],fontFace:FONT,fontSize:11,color:INK,border:{type:'solid',pt:0.5,color:LINE},margin:[0.04,0.06,0.04,0.06]});
+    }
+    if(D.stages.length){
+      sl=pres.addSlide({masterName:'AFS_CONTENT'}); sl.addText('TIME IN EACH STAGE',{placeholder:'title'}); sl.addText('เวลาเฉลี่ยที่เคสอยู่ในแต่ละขั้น (วัน)',{placeholder:'subtitle'});
+      sl.addChart(pres.charts.BAR,[{name:'วันเฉลี่ย',labels:D.stages.map(s=>s.label),values:D.stages.map(s=>Math.round(s.avg*10)/10)}],{x:0.3,y:0.95,w:9,h:5.6,barDir:'bar',catAxisOrientation:'maxMin',chartColors:D.stages.map(s=>hx(s.color)),
+        showLegend:false,showValue:true,dataLabelPosition:'outEnd',dataLabelFontSize:10,dataLabelFontFace:'+mn-lt',catAxisLabelFontFace:'+mn-lt',catAxisLabelFontSize:11,valAxisHidden:true,valGridLine:{style:'none'},catGridLine:{style:'none'}});
+    }
+    await pres.writeFile({fileName:`AFS_Performance_${todayISO()}.pptx`}); toast('ดาวน์โหลดไฟล์ PowerPoint แล้ว');
+  }catch(err){ console.error(err); alert('Export ไม่สำเร็จ: '+(err.message||err)); }
+  finally{ busy(btn,false); if(btn) btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg> Export PowerPoint'; }
+}
+
 function loadScript(src){ return new Promise((res,rej)=>{ if(document.querySelector(`script[src="${src}"]`)) return res(); const el=document.createElement('script'); el.src=src; el.onload=res; el.onerror=()=>rej(new Error('โหลด '+src+' ไม่สำเร็จ')); document.head.appendChild(el); }); }
 async function exportPptx(){
   const btn=$('#btn-pptx'); busy(btn,true); if(btn) btn.textContent='กำลังสร้างไฟล์…';
@@ -1432,7 +1744,7 @@ function openNewCase(customerId){
     <label>ความสำคัญ<select name="priority">${PRIORITIES.map(p=>`<option value="${p.key}" ${p.key==='normal'?'selected':''}>${p.label} (เข้าแก้ภายใน ${p.days} วัน)</option>`).join('')}</select></label>
     ${caseExtraFields({warranty:''})}
     <label>ตำแหน่งในบ้าน<input name="location" placeholder="เช่น ห้องครัว ชั้น 1"></label>
-    <label>ผู้รับผิดชอบ<input name="assignee" list="assignees"><datalist id="assignees">${DB.users.filter(u=>u.role!=='pending').map(u=>`<option value="${esc(u.name)}">`).join('')}</datalist></label>
+    <label>ผู้รับผิดชอบ<select name="assignee">${assigneeOptions('')}</select></label>
     <label>วันที่เปิดเคส<input type="date" name="openedAt" value="${todayISO()}"></label>
     <label>กำหนดปิด (ไม่บังคับ)<input type="date" name="dueAt"></label>
     <label class="full">รายละเอียด<textarea name="detail"></textarea></label>
@@ -1447,7 +1759,7 @@ function openNewCase(customerId){
     try{
       const opened = d.openedAt || todayISO();
       const row = await q(sb.from('cases').insert({customer_id:d.customerId, title:d.title, detail:d.detail, location:d.location, category:d.category, priority:d.priority,
-        status:d.assignee?'assigned':'new', assignee:d.assignee, opened_at:opened, due_at:d.dueAt||null, visit_due:addDays(opened, pr(d.priority).days),
+        status:d.assignee?'assigned':'new', assignee:d.assignee, assignee_id:assigneeIdOf(d.assignee), opened_at:opened, due_at:d.dueAt||null, visit_due:addDays(opened, pr(d.priority).days),
         subcategory:d.subcategory, warranty:d.warranty, orig_contractor:d.origContractor, fix_contractor:d.fixContractor, ref_case_id:((d.refCaseId||'').trim()||nextRefFor(d.customerId)).toUpperCase(), claim_cost:d.claimCost===''?null:Number(d.claimCost)}).select().single(), 'เปิดเคส');
       await addLog(row.id, 'เปิดเคส'+(d.assignee?` · มอบหมายให้ ${d.assignee}`:''));
       const files = fd.getAll('photos').filter(f=>f.size);
@@ -1489,7 +1801,7 @@ async function openCase(id, silent){
   ${closeBox(c)}
   <form class="form" id="ef">
     <label>สถานะ<select name="status" ${ed?'':'disabled'}>${statusOpts.map(s=>`<option value="${s.key}" ${c.status===s.key?'selected':''}>${s.label}</option>`).join('')}</select></label>
-    <label>ผู้รับผิดชอบ<input name="assignee" value="${esc(c.assignee)}" ${ed?'':'disabled'} list="assignees2"><datalist id="assignees2">${DB.users.filter(u=>u.role!=='pending').map(u=>`<option value="${esc(u.name)}">`).join('')}</datalist></label>
+    <label>ผู้รับผิดชอบ<select name="assignee" ${ed?'':'disabled'}>${assigneeOptions(c.assignee)}</select></label>
     <label>ความสำคัญ<select name="priority" ${ed?'':'disabled'}>${PRIORITIES.map(p=>`<option value="${p.key}" ${c.priority===p.key?'selected':''}>${p.label}</option>`).join('')}</select></label>
     <label>ประเภทปัญหา<select name="category" ${ed?'':'disabled'}>${(CATEGORIES.includes(c.category)?CATEGORIES:[c.category,...CATEGORIES]).map(x=>`<option ${c.category===x?'selected':''}>${esc(x)}</option>`).join('')}</select></label>
     ${caseExtraFields(c, ed)}
@@ -1534,7 +1846,7 @@ async function openCase(id, silent){
     const toClose = d.status==='closed' && cur.status!=='closed';
     if(toClose){ d.status=cur.status; changes.splice(0,1); }
     try{
-      const patch = {status:d.status, assignee:d.assignee, priority:d.priority, category:d.category, due_at:d.dueAt||null, location:d.location, title:d.title, detail:d.detail,
+      const patch = {status:d.status, assignee:d.assignee, assignee_id:assigneeIdOf(d.assignee), priority:d.priority, category:d.category, due_at:d.dueAt||null, location:d.location, title:d.title, detail:d.detail,
         subcategory:d.subcategory, warranty:d.warranty, orig_contractor:d.origContractor, fix_contractor:d.fixContractor, visit_due:d.visitDue||null, visited_at:d.visitedAt||null, ref_case_id:(d.refCaseId||'').trim().toUpperCase(), claim_cost:d.claimCost===''?null:Number(d.claimCost)};
       if(d.status!==cur.status) patch.closed_at = d.status==='closed' ? todayISO() : null;
       await q(sb.from('cases').update(patch).eq('id',id), 'บันทึกเคส');
